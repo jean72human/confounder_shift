@@ -377,7 +377,7 @@ class WILDSFMoW(WILDSDataset):
 
 class OODBenchmark(MultipleDomainDataset):
     def __init__(self, train_combinations, test_combinations, root_dir, augment=True, use_vit=False):
-        self.input_shape = (3,500,500)
+        self.input_shape = (3,100,100)
         self.num_classes = 4
         self.N_STEPS = 1000
 
@@ -392,11 +392,13 @@ class OODBenchmark(MultipleDomainDataset):
         self.class_list = ["bulldog","dachshund","labrador","welsh"]
 
         test_transforms_list = [
+            transforms.Resize((self.input_shape[1],self.input_shape[2])),
             transforms.transforms.ToTensor(), 
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ]
 
         train_transforms_list = [
+            transforms.Resize((self.input_shape[1],self.input_shape[2])),
             transforms.RandomHorizontalFlip(),
             transforms.ColorJitter(0.3, 0.3, 0.3, 0.3),
             transforms.RandomGrayscale(),
@@ -505,24 +507,24 @@ class LocationShift1(OODBenchmark):
 
 
 
-# class SpuriousLocation1(OODBenchmark):
-#     ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
-#     def __init__(self, root_dir, test_envs, hparams):
-#         exp1_TI = {}
-#         exp1_TI['train_combinations'] = {
-#             ## correlated class
-#             ("bulldog",):[("desert",490),("desert",420)],
-#             ("dachsund",):[("jungle",490),("jungle",420)],
-#             ("labrador","welsh"):[("mountain",490),("mountain",420)],
-#             ## grass
-#             ("bulldog","dachsund","labrador","welsh"):[("grass",10),("grass",80)],
-#         }
-#         exp1_TI['test_combinations'] = {
-#             ("bulldog",):["mountain"],
-#             ("dachsund",):["desert"],
-#             ("labrador","welsh"):["jungle"],
-#         }
-#         super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], not hparams["resnet18"])
+class SpuriousLocationTest(OODBenchmark):
+     ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
+     def __init__(self, root_dir, test_envs, hparams):
+         exp1_TI = {}
+         exp1_TI['train_combinations'] = {
+             ## correlated class
+             ("bulldog",):[("desert",490),("desert",420)],
+             ("dachsund",):[("jungle",490),("jungle",420)],
+             ("labrador","welsh"):[("mountain",490),("mountain",420)],
+             ## grass
+             ("bulldog","dachsund","labrador","welsh"):[("grass",10),("grass",80)],
+         }
+         exp1_TI['test_combinations'] = {
+             ("bulldog",):["mountain"],
+             ("dachsund",):["desert"],
+             ("labrador","welsh"):["jungle"],
+         }
+         super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], not hparams["resnet18"])
 
 class SpuriousLocation1(OODBenchmark):
     ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
