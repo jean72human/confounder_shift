@@ -12,6 +12,21 @@ from torchvision.transforms.functional import rotate
 from wilds.datasets.camelyon17_dataset import Camelyon17Dataset
 from wilds.datasets.fmow_dataset import FMoWDataset
 
+from torch.utils.data import ConcatDataset, DataLoader
+
+import re
+
+import random
+
+def find_match(string):
+    match = None
+    if 'image' in string:
+        match = re.search(r'\d{1,3}', string.split('image')[-1])
+    if match:
+        return int(match.group())
+    else:
+        return 0
+
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 DATASETS = [
@@ -30,7 +45,11 @@ DATASETS = [
     "SVIRO",
     # WILDS datasets
     "WILDSCamelyon",
-    "WILDSFMoW"
+    "WILDSFMoW",
+    # our datasets,
+    "SpuriousLocation1",
+    "LocationShift1",
+    "Hybrid1",
 ]
 
 def get_dataset_class(dataset_name):
@@ -354,4 +373,237 @@ class WILDSFMoW(WILDSDataset):
         dataset = FMoWDataset(root_dir=root)
         super().__init__(
             dataset, "region", test_envs, hparams['data_augmentation'], hparams)
+
+
+class OODBenchmark(MultipleDomainDataset):
+    def __init__(self, train_combinations, test_combinations, root_dir, augment=True, use_vit=False):
+        self.input_shape = (3,500,500)
+        self.num_classes = 4
+        self.N_STEPS = 1000
+
+        dataset_lower_bound=0
+        dataset_upper_bound=100
+
+        train_data_list = []
+        val_data_list = []
+        test_data_list = []
+
+        #self.class_list = ["bald","bulldog","dachshund","goose","hamster","house","labrador","owl","stallion","welsh"]
+        self.class_list = ["bulldog","dachshund","labrador","welsh"]
+
+        test_transforms_list = [
+            transforms.transforms.ToTensor(), 
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ]
+
+        train_transforms_list = [
+            transforms.RandomHorizontalFlip(),
+            transforms.ColorJitter(0.3, 0.3, 0.3, 0.3),
+            transforms.RandomGrayscale(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+
+        # Build test and validation transforms
+        test_transforms = transforms.transforms.Compose(test_transforms_list)
+
+        # Build training data transforms
+        if augment:
+            train_transforms = transforms.transforms.Compose(train_transforms_list)
+        else:
+            train_transforms = test_transforms
+
+        if isinstance(train_combinations, dict):
+            for_each_class_group = []
+            cg_index = 0
+            for classes,comb_list in train_combinations.items():
+                for_each_class_group.append([])
+                for (location,limit) in comb_list:
+
+                    path = os.path.join(root_dir, f"{location}/")
+                    data = ImageFolder(
+                        root=path, transform=train_transforms, is_valid_file=lambda x: find_match(x)>dataset_lower_bound and find_match(x)>0
+                    )
+                    #print([data.class_to_idx[c] for c in self.class_list])
+
+                    classes_idx = [data.class_to_idx[c] for c in classes]
+                    to_keep_idx = []
+                    for class_to_limit in classes_idx:
+                        count_limit=0
+                        for i in range(len(data)):
+                            if data[i][1] == class_to_limit:
+                                to_keep_idx.append(i)
+                                count_limit+=1
+                            if count_limit>=limit:
+                                break
+
+                    subset = Subset(data, to_keep_idx)
+
+                    for_each_class_group[cg_index].append(subset) 
+                cg_index+=1
+            for group in range(len(for_each_class_group[0])):
+                train_data_list.append(ConcatDataset([
+                    for_each_class_group[k][group] for k in range(len(for_each_class_group))
+                ]))
+        else:
+            for location in train_combinations:
+
+                path = os.path.join(root_dir, f"{location}/")
+                data = ImageFolder(
+                    root=path, transform=train_transforms, is_valid_file=lambda x: find_match(x)>dataset_lower_bound and find_match(x)>0
+                )
+
+                train_data_list.append(data) 
+
+        # Make test_data_list
+        if isinstance(test_combinations, dict):
+            for_each_class_group = []
+            cg_index = 0
+            for classes,comb_list in test_combinations.items():
+                for_each_class_group.append([])
+                for location in comb_list:
+
+                    path = os.path.join(root_dir, f"{location}/")
+                    data = ImageFolder(
+                        root=path, transform=test_transforms, is_valid_file=lambda x: find_match(x)<dataset_upper_bound and find_match(x)>0
+                    )
+
+                    classes_idx = [data.class_to_idx[c] for c in classes]
+                    to_keep_idx = [i for i in range(len(data)) if data.imgs[i][1] in classes_idx]
+
+                    subset = Subset(data, to_keep_idx)
+
+                    for_each_class_group[cg_index].append(subset) 
+                cg_index+=1
+            for group in range(len(for_each_class_group[0])):
+                test_data_list.append(ConcatDataset([
+                    for_each_class_group[k][group] for k in range(len(for_each_class_group))
+                ]))
+        else:
+            for location in test_combinations:
+
+                path = os.path.join(root_dir, f"{location}/")
+                data = ImageFolder(root=path, transform=test_transforms, is_valid_file=lambda x: find_match(x)<dataset_upper_bound and find_match(x)>0)
+
+                test_data_list.append(data) 
+
+        # Concatenate test datasets 
+        test_data = ConcatDataset(test_data_list)
+
+        self.datasets = [test_data] + train_data_list
+        for k,dataset in enumerate(self.datasets[1:]): 
+            print(f"Group {k+1}: {len(dataset)} images")
+
+
+class LocationShift1(OODBenchmark):
+    ENVIRONMENTS = ["Beach","Dirt"]
+    def __init__(self, root_dir, test_envs, hparams):
+        exp1_TI = {}
+        exp1_TI['train_combinations'] = ["dirt"]
+        exp1_TI['test_combinations'] = ["snow"]
+        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], not hparams["resnet18"])
+
+
+
+# class SpuriousLocation1(OODBenchmark):
+#     ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
+#     def __init__(self, root_dir, test_envs, hparams):
+#         exp1_TI = {}
+#         exp1_TI['train_combinations'] = {
+#             ## correlated class
+#             ("bulldog",):[("desert",490),("desert",420)],
+#             ("dachsund",):[("jungle",490),("jungle",420)],
+#             ("labrador","welsh"):[("mountain",490),("mountain",420)],
+#             ## grass
+#             ("bulldog","dachsund","labrador","welsh"):[("grass",10),("grass",80)],
+#         }
+#         exp1_TI['test_combinations'] = {
+#             ("bulldog",):["mountain"],
+#             ("dachsund",):["desert"],
+#             ("labrador","welsh"):["jungle"],
+#         }
+#         super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], not hparams["resnet18"])
+
+class SpuriousLocation1(OODBenchmark):
+    ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
+    def __init__(self, root_dir, test_envs, hparams):
+        counts = [290,260]
+        total = 300
+        exp1_TI = {}
+        exp1_TI['train_combinations'] = {
+            ## correlated class
+            ("bulldog",):[("desert",counts[0]),("desert",counts[1])],
+            ("dachshund",):[("jungle",counts[0]),("jungle",counts[1])],
+            ("labrador",):[("dirt",counts[0]),("dirt",counts[1])],
+            ("welsh",):[("snow",counts[0]),("snow",counts[1])],
+            ## grass
+            ("bulldog","dachshund","labrador","welsh"):[("beach",total-counts[0]),("beach",total-counts[1])],
+        }
+        exp1_TI['test_combinations'] = {
+            ("bulldog",):["jungle"],
+            ("dachshund",):["dirt"],
+            ("labrador",):["snow"],
+            ("welsh",):["desert"],
+        }
+        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], not hparams["resnet18"])
+
+class SpuriousLocation2(OODBenchmark):
+    ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
+    def __init__(self, root_dir, test_envs, hparams):
+        counts = [280,250]
+        total = 300
+        exp1_TI = {}
+        exp1_TI['train_combinations'] = {
+            ## correlated class
+            ("bulldog",):[("dirt",counts[0]),("dirt",counts[1])],
+            ("dachshund",):[("desert",counts[0]),("desert",counts[1])],
+            ("labrador",):[("snow",counts[0]),("snow",counts[1])],
+            ("welsh",):[("beach",counts[0]),("beach",counts[1])],
+            ## grass
+            ("bulldog","dachshund","labrador","welsh"):[("jungle",total-counts[0]),("jungle",total-counts[1])],
+        }
+        exp1_TI['test_combinations'] = {
+            ("bulldog",):["desert"],
+            ("dachshund",):["snow"],
+            ("labrador",):["beach"],
+            ("welsh",):["dirt"],
+        }
+        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], not hparams["resnet18"])
+
+
+class UnseenLocation1(OODBenchmark):
+    ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
+    def __init__(self, root_dir, test_envs, hparams):
+        counts = [280,250]
+        total = 300
+        exp1_TI = {}
+        exp1_TI['train_combinations'] = {
+            ## correlated class
+            ("bulldog",):[("desert",counts[0]),("desert",counts[1])],
+            ("dachshund",):[("jungle",counts[0]),("jungle",counts[1])],
+            ("labrador",):[("dirt",counts[0]),("dirt",counts[1])],
+            ("welsh",):[("snow",counts[0]),("snow",counts[1])],
+            ## grass
+            ("bulldog","dachshund","labrador","welsh"):[("beach",total-counts[0]),("beach",total-counts[1])],
+        }
+        exp1_TI['test_combinations'] = ['mountain']
+        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], not hparams["resnet18"])
+
+
+#class Hybrid1(OODBenchmark):
+#    ENVIRONMENTS = ["Desert","SC_group_1","SC_group_2"]
+#    def __init__(self, root_dir, test_envs, hparams):
+#        exp1_TI = {}
+#        exp1_TI['train_combinations'] = {
+#            ## correlated class
+#            ("bulldog","dachsund","welsh","house","labrador"):[("desert",480),("desert",420)],
+#            ("bald","goose","owl","stallion","hamster"):[("mountain",480),("mountain",420)],
+#            ## mountain
+#            ("bulldog","dachsund","hamster","house","labrador","welsh","bald","goose","owl","stallion"):[("jungle",20),("jungle",80)],
+#        }
+#        exp1_TI['test_combinations'] = ["grass"]
+#        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], not hparams["resnet18"])
+
+
+
 

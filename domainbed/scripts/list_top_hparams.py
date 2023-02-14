@@ -150,3 +150,4 @@ if __name__ == "__main__":
                 output_dirs = hparam_records.select('args.output_dir').unique()
                 for output_dir in output_dirs:
                     print(f"\t\t\t{output_dir}")
+                break

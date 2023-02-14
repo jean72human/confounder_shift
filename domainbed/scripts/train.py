@@ -21,6 +21,7 @@ from domainbed import algorithms
 from domainbed.lib import misc
 from domainbed.lib.fast_data_loader import InfiniteDataLoader, FastDataLoader
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Domain generalization')
     parser.add_argument('--data_dir', type=str)
@@ -44,10 +45,12 @@ if __name__ == "__main__":
     parser.add_argument('--test_envs', type=int, nargs='+', default=[0])
     parser.add_argument('--output_dir', type=str, default="train_output")
     parser.add_argument('--holdout_fraction', type=float, default=0.2)
+    parser.add_argument('--device', type=str, default='cuda:0')
     parser.add_argument('--uda_holdout_fraction', type=float, default=0,
         help="For domain adaptation, % of test to use unlabeled for training.")
     parser.add_argument('--skip_model_save', action='store_true')
     parser.add_argument('--save_model_every_checkpoint', action='store_true')
+    
     args = parser.parse_args()
 
     # If we ever want to implement checkpointing, just persist these values
@@ -91,7 +94,7 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = False
 
     if torch.cuda.is_available():
-        device = "cuda"
+        device = args.device
     else:
         device = "cpu"
 
@@ -203,6 +206,7 @@ if __name__ == "__main__":
         torch.save(save_dict, os.path.join(args.output_dir, filename))
 
 
+    best_results = {}
     last_results_keys = None
     for step in range(start_step, n_steps):
         step_start_time = time.time()
@@ -213,7 +217,9 @@ if __name__ == "__main__":
                 for x,_ in next(uda_minibatches_iterator)]
         else:
             uda_device = None
+        #step_vals = algorithm.update(minibatches_device, uda_device, print_wrong=(step>=n_steps-2))
         step_vals = algorithm.update(minibatches_device, uda_device)
+
         checkpoint_vals['step_time'].append(time.time() - step_start_time)
 
         for key, val in step_vals.items():
@@ -251,12 +257,23 @@ if __name__ == "__main__":
             with open(epochs_path, 'a') as f:
                 f.write(json.dumps(results, sort_keys=True) + "\n")
 
+            if step<=checkpoint_freq:
+                best_results = results
+            else:
+                if sum( [results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i not in args.test_envs] ) > sum( [best_results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i not in args.test_envs] ):
+                    best_results = results
+
             algorithm_dict = algorithm.state_dict()
             start_step = step + 1
             checkpoint_vals = collections.defaultdict(lambda: [])
 
             if args.save_model_every_checkpoint:
                 save_checkpoint(f'model_step{step}.pkl')
+
+    print("BEST")
+    misc.print_row(last_results_keys, colwidth=12)
+    misc.print_row([best_results[key] for key in last_results_keys],
+        colwidth=12)
 
     save_checkpoint('model.pkl')
 

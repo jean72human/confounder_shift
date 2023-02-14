@@ -28,7 +28,7 @@ def _hparams(algorithm, dataset, random_seed):
     # Unconditional hparam definitions.
 
     _hparam('data_augmentation', True, lambda r: True)
-    _hparam('resnet18', False, lambda r: False)
+    _hparam('resnet18', True, lambda r: True)
     _hparam('resnet_dropout', 0., lambda r: r.choice([0., 0.1, 0.5]))
     _hparam('class_balanced', False, lambda r: False)
     # TODO: nonlinear classifiers disabled
@@ -64,7 +64,7 @@ def _hparams(algorithm, dataset, random_seed):
                 lambda r: int(10**r.uniform(0, 4)))
 
     elif algorithm == "Mixup":
-        _hparam('mixup_alpha', 0.2, lambda r: 10**r.uniform(-1, 1))
+        _hparam('mixup_alpha', 0.2, lambda r: 10**r.uniform(-1, -1))
 
     elif algorithm == "GroupDRO":
         _hparam('groupdro_eta', 1e-2, lambda r: 10**r.uniform(-3, -1))
