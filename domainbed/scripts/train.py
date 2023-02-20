@@ -116,6 +116,7 @@ if __name__ == "__main__":
     # domain generalization and domain adaptation results, then domain
     # generalization algorithms should create the same 'uda-splits', which will
     # be discared at training.
+    
     in_splits = []
     out_splits = []
     uda_splits = []

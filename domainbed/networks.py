@@ -71,29 +71,32 @@ class ResNet(torch.nn.Module):
     def __init__(self, input_shape, hparams):
         super(ResNet, self).__init__()
         if hparams['resnet18']:
-            self.network = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1)
+            self.network = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V2)
             self.n_outputs = 512
-
-            nc = input_shape[0]
-            if nc != 3:
-                tmp = self.network.conv1.weight.data.clone()
-
-                self.network.conv1 = nn.Conv2d(
-                    nc, 64, kernel_size=(7, 7),
-                    stride=(2, 2), padding=(3, 3), bias=False)
-
-                for i in range(nc):
-                    self.network.conv1.weight.data[:, i, :, :] = tmp[:, i % 3, :, :]
-
-            # save memory
-            del self.network.fc
-            self.network.fc = Identity()
-
         else:
-            self.network = torchvision.models.vit_b_16(torchvision.models.ViT_B_16_Weights.IMAGENET1K_V1)
-            self.n_outputs = 768
-            del self.network.heads 
-            self.network.heads = Identity()
+            self.network = self.network = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V2)
+            self.n_outputs = 2048
+
+        nc = input_shape[0]
+        if nc != 3:
+            tmp = self.network.conv1.weight.data.clone()
+
+            self.network.conv1 = nn.Conv2d(
+                nc, 64, kernel_size=(7, 7),
+                stride=(2, 2), padding=(3, 3), bias=False)
+
+            for i in range(nc):
+                self.network.conv1.weight.data[:, i, :, :] = tmp[:, i % 3, :, :]
+
+        # save memory
+        del self.network.fc
+        self.network.fc = Identity()
+
+        #else:
+            #self.network = torchvision.models.vit_b_16(torchvision.models.ViT_B_16_Weights.IMAGENET1K_V1)
+            #self.n_outputs = 768
+            #del self.network.heads 
+            #self.network.heads = Identity()
 
         self.freeze_bn()
         self.hparams = hparams
