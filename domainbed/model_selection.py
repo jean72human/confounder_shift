@@ -6,7 +6,9 @@ import numpy as np
 def get_test_records(records):
     """Given records with a common test env, get the test records (i.e. the
     records with *only* that single test env and no other test envs)"""
-    return records.filter(lambda r: len(r['args']['test_envs']) == 1)
+    return records.filter(lambda r: len(r['args']['test_envs']) == 2)
+    ## IMPORTANT : The following line is correct. Changed because the current dataset has two test environment and I trained with that instead of creating a copy with only one test environment
+    #return records.filter(lambda r: len(r['args']['test_envs']) == 2)
 
 class SelectionMethod:
     """Abstract class whose subclasses implement strategies for model
@@ -60,7 +62,7 @@ class OracleSelectionMethod(SelectionMethod):
     @classmethod
     def run_acc(self, run_records):
         run_records = run_records.filter(lambda r:
-            len(r['args']['test_envs']) == 1)
+            len(r['args']['test_envs']) == 2)
         if not len(run_records):
             return None
         test_env = run_records[0]['args']['test_envs'][0]
@@ -79,14 +81,15 @@ class IIDAccuracySelectionMethod(SelectionMethod):
     @classmethod
     def _step_acc(self, record):
         """Given a single record, return a {val_acc, test_acc} dict."""
-        test_env = record['args']['test_envs'][0]
+        #test_env = record['args']['test_envs'][0]
+        test_env = record['args']['test_envs']
         val_env_keys = []
         for i in itertools.count():
             if f'env{i}_out_acc' not in record:
                 break
-            if i != test_env:
+            if i not in test_env:
                 val_env_keys.append(f'env{i}_out_acc')
-        test_in_acc_key = 'env{}_in_acc'.format(test_env)
+        test_in_acc_key = 'env{}_in_acc'.format(test_env[0])
         return {
             'val_acc': np.mean([record[key] for key in val_env_keys]),
             'test_acc': record[test_in_acc_key]

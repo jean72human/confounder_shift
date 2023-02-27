@@ -29,11 +29,10 @@ def _hparams(algorithm, dataset, random_seed):
 
     _hparam('data_augmentation', True, lambda r: True)
     _hparam('resnet18', True, lambda r: True)
-    _hparam('resnet_dropout', 0., lambda r: r.choice([0., 0.1, 0.5]))
+    _hparam('resnet_dropout', 0., lambda r: 0.1)
     _hparam('class_balanced', False, lambda r: False)
     # TODO: nonlinear classifiers disabled
-    _hparam('nonlinear_classifier', False,
-            lambda r: bool(r.choice([False, False])))
+    _hparam('nonlinear_classifier', False, lambda r: False)
 
     # Algorithm-specific hparam definitions. Each block of code below
     # corresponds to exactly one algorithm.
@@ -142,11 +141,19 @@ def _hparams(algorithm, dataset, random_seed):
 
     if dataset in SMALL_IMAGES:
         _hparam('lr', 1e-3, lambda r: 10**r.uniform(-4.5, -2.5))
+    elif dataset == "SpuriousLocation1":
+        _hparam('lr', 0.00016629177873519647, lambda r: 0.00016629177873519647)
+    elif dataset == "SpuriousLocation2":
+        _hparam('lr', 0.0001653813153854724, lambda r: 0.0001653813153854724)
     else:
         _hparam('lr', 5e-5, lambda r: 10**r.uniform(-5, -3.5))
 
     if dataset in SMALL_IMAGES:
         _hparam('weight_decay', 0., lambda r: 0.)
+    elif dataset == "SpuriousLocation1":
+        _hparam('weight_decay', 1.1975155295174919e-06, lambda r: 1.1975155295174919e-06)
+    elif dataset == "SpuriousLocation2":
+        _hparam('weight_decay', 2.7643974709171963e-05, lambda r: 2.7643974709171963e-05)
     else:
         _hparam('weight_decay', 0., lambda r: 10**r.uniform(-6, -2))
 
@@ -157,7 +164,7 @@ def _hparams(algorithm, dataset, random_seed):
     elif dataset == 'DomainNet':
         _hparam('batch_size', 32, lambda r: int(2**r.uniform(3, 5)))
     else:
-        _hparam('batch_size', 32, lambda r: int(2**r.uniform(3, 5.5)))
+        _hparam('batch_size', 32, lambda r: 128)
 
     if algorithm in ['DANN', 'CDANN'] and dataset in SMALL_IMAGES:
         _hparam('lr_g', 1e-3, lambda r: 10**r.uniform(-4.5, -2.5))

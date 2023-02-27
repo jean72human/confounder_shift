@@ -283,7 +283,7 @@ if __name__ == "__main__":
             colwidth=12)
         best_list.append(best_results)
 
-        save_checkpoint('{args.dataset}_{args.algorithm}_model.pkl')
+        save_checkpoint(f'{args.dataset}_{args.algorithm}_model.pkl')
 
     print()
     average_results = {

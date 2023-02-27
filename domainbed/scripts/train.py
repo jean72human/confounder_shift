@@ -49,6 +49,7 @@ if __name__ == "__main__":
     parser.add_argument('--uda_holdout_fraction', type=float, default=0,
         help="For domain adaptation, % of test to use unlabeled for training.")
     parser.add_argument('--skip_model_save', action='store_true')
+    parser.add_argument('--quiet', action='store_false')
     parser.add_argument('--save_model_every_checkpoint', action='store_true')
     
     args = parser.parse_args()
@@ -62,18 +63,19 @@ if __name__ == "__main__":
     sys.stdout = misc.Tee(os.path.join(args.output_dir, 'out.txt'))
     sys.stderr = misc.Tee(os.path.join(args.output_dir, 'err.txt'))
 
-    print("Environment:")
-    print("\tPython: {}".format(sys.version.split(" ")[0]))
-    print("\tPyTorch: {}".format(torch.__version__))
-    print("\tTorchvision: {}".format(torchvision.__version__))
-    print("\tCUDA: {}".format(torch.version.cuda))
-    print("\tCUDNN: {}".format(torch.backends.cudnn.version()))
-    print("\tNumPy: {}".format(np.__version__))
-    print("\tPIL: {}".format(PIL.__version__))
+    if args.quiet:
+        print("Environment:")
+        print("\tPython: {}".format(sys.version.split(" ")[0]))
+        print("\tPyTorch: {}".format(torch.__version__))
+        print("\tTorchvision: {}".format(torchvision.__version__))
+        print("\tCUDA: {}".format(torch.version.cuda))
+        print("\tCUDNN: {}".format(torch.backends.cudnn.version()))
+        print("\tNumPy: {}".format(np.__version__))
+        print("\tPIL: {}".format(PIL.__version__))
 
-    print('Args:')
-    for k, v in sorted(vars(args).items()):
-        print('\t{}: {}'.format(k, v))
+        print('Args:')
+        for k, v in sorted(vars(args).items()):
+            print('\t{}: {}'.format(k, v))
 
     if args.hparams_seed == 0:
         hparams = hparams_registry.default_hparams(args.algorithm, args.dataset)
@@ -83,9 +85,10 @@ if __name__ == "__main__":
     if args.hparams:
         hparams.update(json.loads(args.hparams))
 
-    print('HParams:')
-    for k, v in sorted(hparams.items()):
-        print('\t{}: {}'.format(k, v))
+    if args.quiet:
+        print('HParams:')
+        for k, v in sorted(hparams.items()):
+            print('\t{}: {}'.format(k, v))
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -244,9 +247,9 @@ if __name__ == "__main__":
 
             results_keys = sorted(results.keys())
             if results_keys != last_results_keys:
-                misc.print_row(results_keys, colwidth=12)
+                if args.quiet: misc.print_row(results_keys, colwidth=12)
                 last_results_keys = results_keys
-            misc.print_row([results[key] for key in results_keys],
+            if args.quiet: misc.print_row([results[key] for key in results_keys],
                 colwidth=12)
 
             results.update({

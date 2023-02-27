@@ -103,7 +103,7 @@ def make_args_list(n_trials, dataset_names, algorithms, n_hparams_from, n_hparam
         for dataset in dataset_names:
             for algorithm in algorithms:
                 if single_test_envs:
-                    all_test_envs = [[0]]
+                    all_test_envs = [[0,1]]
                 else:
                     all_test_envs = all_test_env_combinations(
                         datasets.num_environments(dataset))
@@ -170,7 +170,7 @@ if __name__ == "__main__":
             task=args.task,
             holdout_fraction=args.holdout_fraction,
             single_test_envs=args.single_test_envs,
-            hparams=args.hparams
+            hparams=args.hparams,
             device=args.device
         )
 
