@@ -28,7 +28,7 @@ def _hparams(algorithm, dataset, random_seed):
     # Unconditional hparam definitions.
 
     _hparam('data_augmentation', True, lambda r: True)
-    _hparam('resnet18', True, lambda r: True)
+    _hparam('arch', "resnet18", lambda r: "resnet18")
     _hparam('resnet_dropout', 0., lambda r: 0.1)
     _hparam('class_balanced', False, lambda r: False)
     # TODO: nonlinear classifiers disabled

@@ -501,7 +501,7 @@ class OODBenchmark(MultipleDomainDataset):
 
 
 class LocationShift1(OODBenchmark):
-    ENVIRONMENTS = ["Beach","Dirt"]
+    ENVIRONMENTS = ["Snow","Beach","Dirt"]
     def __init__(self, root_dir, test_envs, hparams):
         exp1_TI = {}
         exp1_TI['train_combinations'] = ["dirt",'jungle']
@@ -509,85 +509,123 @@ class LocationShift1(OODBenchmark):
         super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
 
 
-class SpuriousLocation1(OODBenchmark):
+class SpuriousLocationType1_1(OODBenchmark):
     ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
     def __init__(self, root_dir, test_envs, hparams):
-        counts = [838,751] #0.97 and 0.87
-        total = 864
+        total = 3168
+        counts = [int(0.97*total),int(0.87*total)]
+
+        group = ["desert","jungle","dirt","snow"]
+        test = ["jungle","dirt","snow","desert"]
+        test2 = ["dirt","snow","desert","jungle"]
+        filler = "beach"
+
         exp1_TI = {}
         exp1_TI['train_combinations'] = {
             ## correlated class
-            ("bulldog",):[("desert",counts[0]),("desert",counts[1])],
-            ("dachshund",):[("jungle",counts[0]),("jungle",counts[1])],
-            ("labrador",):[("dirt",counts[0]),("dirt",counts[1])],
-            ("corgi",):[("snow",counts[0]),("snow",counts[1])],
-            ## grass
-            ("bulldog","dachshund","labrador","corgi"):[("beach",total-counts[0]),("beach",total-counts[1])],
+            ("bulldog",):[(group[0],counts[0]),(group[0],counts[1])],
+            ("dachshund",):[(group[1],counts[0]),(group[1],counts[1])],
+            ("labrador",):[(group[2],counts[0]),(group[2],counts[1])],
+            ("corgi",):[(group[3],counts[0]),(group[3],counts[1])],
+            ## filler
+            ("bulldog","dachshund","labrador","corgi"):[(filler,total-counts[0]),(filler,total-counts[1])],
         }
+        ## TEST
         exp1_TI['test_combinations'] = {
-            ("bulldog",):["jungle","dirt"],
-            ("dachshund",):["dirt","snow"],
-            ("labrador",):["snow","desert"],
-            ("corgi",):["desert","jungle"]
+            ("bulldog",):[test[0], test2[0]],
+            ("dachshund",):[test[1], test2[1]],
+            ("labrador",):[test[2], test2[2]],
+            ("corgi",):[test[3], test2[3]],
         }
         super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
 
 
-class SpuriousLocation2(OODBenchmark):
-    ENVIRONMENTS = ["Test","SC_group_1","SC_group_2"]
-    def __init__(self, root_dir, test_envs, hparams):
-        counts = [864,864]
-        total = 864
-        exp1_TI = {}
-        exp1_TI['train_combinations'] = {
-            ## correlated class
-            ("bulldog",):[("dirt",counts[0]),("jungle",counts[1])],
-            ("dachshund",):[("jungle",counts[0]),("dirt",counts[1])],
-            ("labrador",):[("snow",counts[0]),("beach",counts[1])],
-            ("corgi",):[("beach",counts[0]),("snow",counts[1])],
-        }
-        exp1_TI['test_combinations'] = {
-            ("bulldog",):["snow","beach"],
-            ("dachshund",):["beach","snow"],
-            ("labrador",):["dirt","jungle"],
-            ("corgi",):["jungle","dirt"],
-        }
-        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
-
-
-class UnseenLocation1(OODBenchmark):
+class SpuriousLocationType1_2(OODBenchmark):
     ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
     def __init__(self, root_dir, test_envs, hparams):
-        counts = [800,700]
-        total = 864
+        total = 3168
+        counts = [int(0.97*total),int(0.87*total)]
+
+        group = ['mountain', 'beach', 'dirt', 'jungle']
+        test = ['mountain', 'dirt', 'beach', 'snow']
+        test2 = ['dirt', 'jungle', 'mountain', 'beach']
+        filler = "desert"
+
         exp1_TI = {}
         exp1_TI['train_combinations'] = {
             ## correlated class
-            ("bulldog",):[("desert",counts[0]),("desert",counts[1])],
-            ("dachshund",):[("jungle",counts[0]),("jungle",counts[1])],
-            ("labrador",):[("dirt",counts[0]),("dirt",counts[1])],
-            ("corgi",):[("snow",counts[0]),("snow",counts[1])],
-            ## grass
-            ("bulldog","dachshund","labrador","corgi"):[("beach",total-counts[0]),("beach",total-counts[1])],
+            ("bulldog",):[(group[0],counts[0]),(group[0],counts[1])],
+            ("dachshund",):[(group[1],counts[0]),(group[1],counts[1])],
+            ("labrador",):[(group[2],counts[0]),(group[2],counts[1])],
+            ("corgi",):[(group[3],counts[0]),(group[3],counts[1])],
+            ## filler
+            ("bulldog","dachshund","labrador","corgi"):[(filler,total-counts[0]),(filler,total-counts[1])],
         }
-        exp1_TI['test_combinations'] = ['mountain']
+        ## TEST
+        exp1_TI['test_combinations'] = {
+            ("bulldog",):[test[0], test2[0]],
+            ("dachshund",):[test[1], test2[1]],
+            ("labrador",):[test[2], test2[2]],
+            ("corgi",):[test[3], test2[3]],
+        }
         super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
 
 
-class UnseenLocation2(OODBenchmark):
-    ENVIRONMENTS = ["Test","SC_group_1","SC_group_2"]
+class SpuriousLocationType1_3(OODBenchmark):
+    ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
     def __init__(self, root_dir, test_envs, hparams):
-        counts = [864,864]
-        total = 864
+        total = 3168
+        counts = [int(0.97*total),int(0.87*total)]
+
+        group = ['jungle', 'mountain', 'snow', 'desert']
+        test = ['mountain', 'snow', 'desert', 'jungle']
+        test2 = ['dirt', 'jungle', 'mountain', 'snow']
+        filler = "beach"
+
         exp1_TI = {}
         exp1_TI['train_combinations'] = {
             ## correlated class
-            ("bulldog",):[("dirt",counts[0]),("desert",counts[1])],
-            ("dachshund",):[("desert",counts[0]),("dirt",counts[1])],
-            ("labrador",):[("snow",counts[0]),("beach",counts[1])],
-            ("corgi",):[("beach",counts[0]),("snow",counts[1])],
+            ("bulldog",):[(group[0],counts[0]),(group[0],counts[1])],
+            ("dachshund",):[(group[1],counts[0]),(group[1],counts[1])],
+            ("labrador",):[(group[2],counts[0]),(group[2],counts[1])],
+            ("corgi",):[(group[3],counts[0]),(group[3],counts[1])],
+            ## filler
+            ("bulldog","dachshund","labrador","corgi"):[(filler,total-counts[0]),(filler,total-counts[1])],
         }
-        exp1_TI['test_combinations'] = ['mountain']
+        ## TEST
+        exp1_TI['test_combinations'] = {
+            ("bulldog",):[test[0], test2[0]],
+            ("dachshund",):[test[1], test2[1]],
+            ("labrador",):[test[2], test2[2]],
+            ("corgi",):[test[3], test2[3]],
+        }
+        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
+
+
+
+class SpuriousLocationType2_1(OODBenchmark):
+    ENVIRONMENTS = ["Test","SC_group_1","SC_group_2"]
+    def __init__(self, root_dir, test_envs, hparams):
+        total = 3168
+        counts = [total,total]
+
+        group = ["dirt","jungle","snow","beach"]
+        test = ["snow","beach","dirt","jungle"]
+
+        exp1_TI = {}
+        exp1_TI['train_combinations'] = {
+            ## correlated class
+            ("bulldog",):[(group[0],counts[0]),(group[1],counts[1])],
+            ("dachshund",):[(group[1],counts[0]),(group[0],counts[1])],
+            ("labrador",):[(group[2],counts[0]),(group[3],counts[1])],
+            ("corgi",):[(group[3],counts[0]),(group[2],counts[1])],
+        }
+        exp1_TI['test_combinations'] = {
+            ("bulldog",):[test[0], test[1]],
+            ("dachshund",):[test[1], test[0]],
+            ("labrador",):[test[2], test[3]],
+            ("corgi",):[test[3], test[2]],
+        }
         super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
 
 
