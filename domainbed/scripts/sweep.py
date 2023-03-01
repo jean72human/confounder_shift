@@ -151,7 +151,6 @@ if __name__ == "__main__":
         parser.add_argument('--n_trials', type=int, default=1)
         parser.add_argument('--command_launcher', type=str, required=True)
         parser.add_argument('--device', type=str, default='cuda:0')
-        parser.add_argument('--resnet', action='store_true')
         parser.add_argument('--steps', type=int, default=None)
         parser.add_argument('--hparams', type=str, default=None)
         parser.add_argument('--holdout_fraction', type=float, default=0.2)

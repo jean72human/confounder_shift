@@ -5,5 +5,7 @@ domainbed/data/*
 train_output/*
 search_output/*
 loop_output/*
+final_output/*
+*_output/
 
 data

@@ -101,6 +101,7 @@ if __name__ == "__main__":
     else:
         device = "cpu"
 
+    #print(vars(datasets))
     if args.dataset in vars(datasets):
         dataset = vars(datasets)[args.dataset](args.data_dir,
             args.test_envs, hparams)
