@@ -512,7 +512,7 @@ class LocationShift1(OODBenchmark):
 class SpuriousLocationType1_1(OODBenchmark):
     ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
     def __init__(self, root_dir, test_envs, hparams):
-        total = 864
+        total = 3168
         counts = [int(0.97*total),int(0.87*total)]
 
         group = ["desert","jungle","dirt","snow"]
@@ -547,7 +547,7 @@ class SpuriousLocationType1_2(OODBenchmark):
         counts = [int(0.97*total),int(0.87*total)]
 
         group = ['mountain', 'beach', 'dirt', 'jungle']
-        test = ['mountain', 'dirt', 'beach', 'snow']
+        test = ['jungle', 'dirt', 'beach', 'snow']
         test2 = ['dirt', 'jungle', 'mountain', 'beach']
         filler = "desert"
 
@@ -606,7 +606,7 @@ class SpuriousLocationType1_3(OODBenchmark):
 class SpuriousLocationType2_1(OODBenchmark):
     ENVIRONMENTS = ["Test","SC_group_1","SC_group_2"]
     def __init__(self, root_dir, test_envs, hparams):
-        total = 864
+        total = 3168
         counts = [total,total]
 
         group = ["dirt","jungle","snow","beach"]
@@ -631,11 +631,11 @@ class SpuriousLocationType2_1(OODBenchmark):
 class SpuriousLocationType2_2(OODBenchmark):
     ENVIRONMENTS = ["Test","SC_group_1","SC_group_2"]
     def __init__(self, root_dir, test_envs, hparams):
-        total = 864
+        total = 3168
         counts = [total,total]
 
-        group = ['desert', 'mountain', 'beach', 'jungle']
-        test = ['beach', 'jungle', 'mountain', 'desert']
+        group = ['desert', 'mountain', 'dirt', 'jungle']
+        test = ['dirt', 'jungle', 'mountain', 'desert']
 
         exp1_TI = {}
         exp1_TI['train_combinations'] = {
@@ -657,19 +657,19 @@ class SpuriousLocationType2_2(OODBenchmark):
 class SpuriousLocationType2_3(OODBenchmark):
     ENVIRONMENTS = ["Test","SC_group_1","SC_group_2"]
     def __init__(self, root_dir, test_envs, hparams):
-        total = 864
+        total = 3168
         counts = [total,total]
 
         group = ['beach', 'snow', 'mountain', 'desert']
-        test = ['desert', 'mountain', 'beach', 'dirt']
+        test = ['desert', 'mountain', 'beach', 'snow']
 
         exp1_TI = {}
         exp1_TI['train_combinations'] = {
             ## correlated class
             ("bulldog",):[(group[0],counts[0]),(group[1],counts[1])],
-            ("dachshund",):[(group[1],counts[0]),(group[0],counts[1])],
+            ("dachshund",):[(group[0],counts[0]),(group[1],counts[1])],
             ("labrador",):[(group[2],counts[0]),(group[3],counts[1])],
-            ("corgi",):[(group[3],counts[0]),(group[2],counts[1])],
+            ("corgi",):[(group[2],counts[0]),(group[3],counts[1])],
         }
         exp1_TI['test_combinations'] = {
             ("bulldog",):[test[0], test[1]],
