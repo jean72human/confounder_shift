@@ -12,6 +12,8 @@ parser.add_argument('--seed', type=int, default=1)
 
 args = parser.parse_args()
 
+data_dir = "/home/aengusl/Desktop/Projects/OOD_workshop/Stable_Diffusion_Generation/gen_images/full_folder"
+
 hparams_dict = {
     "SpuriousLocationType1_1": {
         "ERM": """{"batch_size": 128, 
@@ -65,4 +67,4 @@ for arch in ["dino","convnext","vit-b"]:
             hparams_dict[dataset][algo]["arch"] = arch
             hparams = hparams_dict[dataset][algo].replace("\n", "").replace(" ", "")
             print(f"Train {algo} on {dataset}")
-            os.system(f"""python3 -m domainbed.scripts.train_n --data_dir=/home/aengusl/Desktop/Projects/OOD_workshop/Stable_Diffusion_Generation/gen_images/full_folder  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir final_output --n_iter 3""")
+            os.system(f"""python3 -m domainbed.scripts.train_n --data_dir={data_dir}  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir final_output --n_iter 3""")
