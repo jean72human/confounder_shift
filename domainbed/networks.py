@@ -98,6 +98,12 @@ class ResNet(torch.nn.Module):
             self.n_outputs = 768
             del self.network.heads 
             self.network.heads = Identity()
+        elif hparams['arch']=="beit-b":
+            self.network = timm.create_model('beit_base_patch16_224_in22k', features_only=True, pretrained=True)
+        elif hparams['arch']=="convnext":
+            self.network = timm.create_model('convnext_base_in22k', features_only=True, pretrained=True)
+        elif hparams['dino']=="dino":
+            self.network = timm.create_model('vit_base_patch16_224.dino', features_only=True, pretrained=True)
 
         self.freeze_bn()
         self.hparams = hparams

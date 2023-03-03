@@ -211,7 +211,7 @@ class MultipleEnvironmentImageFolder(MultipleDomainDataset):
         ])
 
         augment_transform = transforms.Compose([
-            # transforms.Resize((224,224)),
+            # transforms.Resize((224,224))
             transforms.RandomResizedCrop(224, scale=(0.7, 1.0)),
             transforms.RandomHorizontalFlip(),
             transforms.ColorJitter(0.3, 0.3, 0.3, 0.3),
@@ -381,7 +381,7 @@ class OODBenchmark(MultipleDomainDataset):
     def __init__(self, train_combinations, test_combinations, root_dir, augment=True):
         self.input_shape = (3,224,224)
         self.num_classes = 4
-        self.N_STEPS = 1500
+        self.N_STEPS = 3001
         self.N_WORKERS = 8
 
         dataset_lower_bound=100
@@ -421,11 +421,11 @@ class OODBenchmark(MultipleDomainDataset):
         if isinstance(train_combinations, dict):
             for_each_class_group = []
             cg_index = 0
-            for classes,comb_list in train_combinations.items():
+            for ind, (classes,comb_list) in enumerate(train_combinations.items()):
                 for_each_class_group.append([])
                 for (location,limit) in comb_list:
 
-                    path = os.path.join(root_dir, f"{location}/")
+                    path = os.path.join(root_dir, f"{ind}/{location}/")
                     data = ImageFolder(
                         root=path, transform=train_transforms
                     )#, is_valid_file=lambda x: find_match(x)>dataset_lower_bound and find_match(x)>0
@@ -451,9 +451,9 @@ class OODBenchmark(MultipleDomainDataset):
                     for_each_class_group[k][group] for k in range(len(for_each_class_group))
                 ]))
         else:
-            for location in train_combinations:
+            for ind,location in enumerate(train_combinations):
 
-                path = os.path.join(root_dir, f"{location}/")
+                path = os.path.join(root_dir, f"{ind}/{location}/")
                 data = ImageFolder(
                     root=path, transform=train_transforms
                 )#, is_valid_file=lambda x: find_match(x)>dataset_lower_bound and find_match(x)>0
@@ -464,11 +464,11 @@ class OODBenchmark(MultipleDomainDataset):
         if isinstance(test_combinations, dict):
             for_each_class_group = []
             cg_index = 0
-            for classes,comb_list in test_combinations.items():
+            for ind, (classes,comb_list) in enumerate(test_combinations.items()):
                 for_each_class_group.append([])
                 for location in comb_list:
 
-                    path = os.path.join(root_dir, f"{location}/")
+                    path = os.path.join(root_dir, f"{ind}/{location}/")
                     data = ImageFolder(
                         root=path, transform=test_transforms
                     )#, is_valid_file=lambda x: find_match(x)<dataset_upper_bound and find_match(x)>0
@@ -485,17 +485,17 @@ class OODBenchmark(MultipleDomainDataset):
                     for_each_class_group[k][group] for k in range(len(for_each_class_group))
                 ]))
         else:
-            for location in test_combinations:
+            for ind, location in enumerate(test_combinations):
 
-                path = os.path.join(root_dir, f"{location}/")
+                path = os.path.join(root_dir, f"{ind}/{location}/")
                 data = ImageFolder(root=path, transform=test_transforms)#, is_valid_file=lambda x: find_match(x)<dataset_upper_bound and find_match(x)>0
 
                 test_data_list.append(data) 
 
         # Concatenate test datasets 
-        #test_data = ConcatDataset(test_data_list)
+        test_data = ConcatDataset(test_data_list)
  
-        self.datasets = test_data_list + train_data_list
+        self.datasets = [test_data] + train_data_list
         # for k,dataset in enumerate(self.datasets): 
         #     print(f"Group {k+1}: {len(dataset)} images")
 

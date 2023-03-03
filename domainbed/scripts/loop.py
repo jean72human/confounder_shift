@@ -134,7 +134,7 @@ hparams_dict["SpuriousLocationType2_2"] = hparams_dict["SpuriousLocationType2_1"
 hparams_dict["SpuriousLocationType2_3"] = hparams_dict["SpuriousLocationType2_1"]
 
 for algo in ["ERM","GroupDRO","IRM","CORAL","CausIRL_CORAL","MMD"]: #
-    for dataset in ["SpuriousLocationType2_2","SpuriousLocationType2_3"]:
+    for dataset in ["SpuriousLocationType1_1","SpuriousLocationType1_2","SpuriousLocationType1_3"]:
         hparams = hparams_dict[dataset][algo].replace("\n", "").replace(" ", "")
         print(f"Train {algo} on {dataset}")
-        os.system(f"""python3 -m domainbed.scripts.train_n --data_dir=/home/aengusl/Desktop/Projects/OOD_workshop/Stable_Diffusion_Generation/gen_images/full_folder  --algorithm {algo} --test_env 0 1 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir final_output --n_iter 3""")
+        os.system(f"""python3 -m domainbed.scripts.train_n --data_dir=/home/aengusl/Desktop/Projects/OOD_workshop/Stable_Diffusion_Generation/gen_images/full_folder  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir final_output --n_iter 3""")

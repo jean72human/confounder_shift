@@ -54,10 +54,6 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    sys.stdout = misc.Tee(os.path.join(args.output_dir, f'{args.dataset}_{args.algorithm}_out.txt'))
-    sys.stderr = misc.Tee(os.path.join(args.output_dir, f'{args.dataset}_{args.algorithm}_err.txt'))
-
     print("Environment:")
     print("\tPython: {}".format(sys.version.split(" ")[0]))
     print("\tPyTorch: {}".format(torch.__version__))
@@ -82,6 +78,10 @@ if __name__ == "__main__":
     print('HParams:')
     for k, v in sorted(hparams.items()):
         print('\t{}: {}'.format(k, v))
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    sys.stdout = misc.Tee(os.path.join(args.output_dir, f'{args.hparams["arch"]}_{args.dataset}_{args.algorithm}_out.txt'))
+    sys.stderr = misc.Tee(os.path.join(args.output_dir, f'{args.hparams["arch"]}_{args.dataset}_{args.algorithm}_err.txt'))
 
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
@@ -283,7 +283,7 @@ if __name__ == "__main__":
             colwidth=12)
         best_list.append(best_results)
 
-        save_checkpoint(f'{args.dataset}_{args.algorithm}_model.pkl')
+        save_checkpoint(f'{args.hparams["arch"]}_{args.dataset}_{args.algorithm}_model.pkl')
 
     print()
     average_results = {
