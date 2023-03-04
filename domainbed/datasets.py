@@ -378,17 +378,15 @@ class WILDSFMoW(WILDSDataset):
 
 
 class OODBenchmark(MultipleDomainDataset):
-    def __init__(self, train_combinations, test_combinations, root_dir, augment=True):
+    def __init__(self, train_combinations, test_combinations, root_dir, augment=True, type1=False):
         self.input_shape = (3,224,224)
         self.num_classes = 4
         self.N_STEPS = 3001
         self.N_WORKERS = 8
 
-        dataset_lower_bound=100
-        dataset_upper_bound=100
+        self.type1 = type1
 
         train_data_list = []
-        val_data_list = []
         test_data_list = []
 
         #self.class_list = ["bald","bulldog","dachshund","goose","hamster","house","labrador","owl","stallion","corgi"]
@@ -425,7 +423,8 @@ class OODBenchmark(MultipleDomainDataset):
                 for_each_class_group.append([])
                 for (location,limit) in comb_list:
 
-                    path = os.path.join(root_dir, f"{ind}/{location}/")
+                    path = os.path.join(root_dir, f"{0}/{location}/")
+                    if self.type1: path = os.path.join(root_dir, f"{ind}/{location}/")
                     data = ImageFolder(
                         root=path, transform=train_transforms
                     )#, is_valid_file=lambda x: find_match(x)>dataset_lower_bound and find_match(x)>0
@@ -453,7 +452,8 @@ class OODBenchmark(MultipleDomainDataset):
         else:
             for ind,location in enumerate(train_combinations):
 
-                path = os.path.join(root_dir, f"{ind}/{location}/")
+                path = os.path.join(root_dir, f"{0}/{location}/")
+                if self.type1: path = os.path.join(root_dir, f"{ind}/{location}/")
                 data = ImageFolder(
                     root=path, transform=train_transforms
                 )#, is_valid_file=lambda x: find_match(x)>dataset_lower_bound and find_match(x)>0
@@ -468,7 +468,8 @@ class OODBenchmark(MultipleDomainDataset):
                 for_each_class_group.append([])
                 for location in comb_list:
 
-                    path = os.path.join(root_dir, f"{ind}/{location}/")
+                    path = os.path.join(root_dir, f"{0}/{location}/")
+                    if self.type1: path = os.path.join(root_dir, f"{ind}/{location}/")
                     data = ImageFolder(
                         root=path, transform=test_transforms
                     )#, is_valid_file=lambda x: find_match(x)<dataset_upper_bound and find_match(x)>0
@@ -487,7 +488,8 @@ class OODBenchmark(MultipleDomainDataset):
         else:
             for ind, location in enumerate(test_combinations):
 
-                path = os.path.join(root_dir, f"{ind}/{location}/")
+                path = os.path.join(root_dir, f"{0}/{location}/")
+                if self.type1: path = os.path.join(root_dir, f"{ind}/{location}/")
                 data = ImageFolder(root=path, transform=test_transforms)#, is_valid_file=lambda x: find_match(x)<dataset_upper_bound and find_match(x)>0
 
                 test_data_list.append(data) 
@@ -516,8 +518,7 @@ class SpuriousLocationType1_1(OODBenchmark):
         counts = [int(0.97*total),int(0.87*total)]
 
         group = ["desert","jungle","dirt","snow"]
-        test = ["jungle","dirt","snow","desert"]
-        test2 = ["dirt","snow","desert","jungle"]
+        test = ["dirt","snow","desert","jungle"]
         filler = "beach"
 
         exp1_TI = {}
@@ -532,12 +533,12 @@ class SpuriousLocationType1_1(OODBenchmark):
         }
         ## TEST
         exp1_TI['test_combinations'] = {
-            ("bulldog",):[test[0], test2[0]],
-            ("dachshund",):[test[1], test2[1]],
-            ("labrador",):[test[2], test2[2]],
-            ("corgi",):[test[3], test2[3]],
+            ("bulldog",):[test[0], test[0]],
+            ("dachshund",):[test[1], test[1]],
+            ("labrador",):[test[2], test[2]],
+            ("corgi",):[test[3], test[3]],
         }
-        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
+        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], type1=True)
 
 
 class SpuriousLocationType1_2(OODBenchmark):
@@ -548,7 +549,6 @@ class SpuriousLocationType1_2(OODBenchmark):
 
         group = ['mountain', 'beach', 'dirt', 'jungle']
         test = ['jungle', 'dirt', 'beach', 'snow']
-        test2 = ['dirt', 'jungle', 'mountain', 'beach']
         filler = "desert"
 
         exp1_TI = {}
@@ -563,12 +563,12 @@ class SpuriousLocationType1_2(OODBenchmark):
         }
         ## TEST
         exp1_TI['test_combinations'] = {
-            ("bulldog",):[test[0], test2[0]],
-            ("dachshund",):[test[1], test2[1]],
-            ("labrador",):[test[2], test2[2]],
-            ("corgi",):[test[3], test2[3]],
+            ("bulldog",):[test[0], test[0]],
+            ("dachshund",):[test[1], test[1]],
+            ("labrador",):[test[2], test[2]],
+            ("corgi",):[test[3], test[3]],
         }
-        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
+        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], type1=True)
 
 
 class SpuriousLocationType1_3(OODBenchmark):
@@ -579,7 +579,6 @@ class SpuriousLocationType1_3(OODBenchmark):
 
         group = ['jungle', 'mountain', 'snow', 'desert']
         test = ['mountain', 'snow', 'desert', 'jungle']
-        test2 = ['dirt', 'jungle', 'mountain', 'snow']
         filler = "beach"
 
         exp1_TI = {}
@@ -594,12 +593,12 @@ class SpuriousLocationType1_3(OODBenchmark):
         }
         ## TEST
         exp1_TI['test_combinations'] = {
-            ("bulldog",):[test[0], test2[0]],
-            ("dachshund",):[test[1], test2[1]],
-            ("labrador",):[test[2], test2[2]],
-            ("corgi",):[test[3], test2[3]],
+            ("bulldog",):[test[0], test[0]],
+            ("dachshund",):[test[1], test[1]],
+            ("labrador",):[test[2], test[2]],
+            ("corgi",):[test[3], test[3]],
         }
-        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
+        super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"], type1=True)
 
 
 

@@ -12,7 +12,7 @@ parser.add_argument('--seed', type=int, default=1)
 
 args = parser.parse_args()
 
-data_dir = "/home/aengusl/Desktop/Projects/OOD_workshop/Stable_Diffusion_Generation/gen_images/full_folder"
+data_dir = "/home/aengusl/Desktop/Projects/OOD_workshop/Stable_Diffusion_Generation/gen_images/datadir"
 batch_size = 32
 
 hparams_dict = {
