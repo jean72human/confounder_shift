@@ -62,7 +62,7 @@ hparams_dict["SpuriousLocationType1_3"] = hparams_dict["SpuriousLocationType1_1"
 hparams_dict["SpuriousLocationType2_2"] = hparams_dict["SpuriousLocationType2_1"]
 hparams_dict["SpuriousLocationType2_3"] = hparams_dict["SpuriousLocationType2_1"]
 
-for arch in ["dino","convnext","vit-b"]:
+for arch in ["dino","vit-b"]:
     for algo in ["ERM","MMD"]: 
         for dataset in ["SpuriousLocationType1_1","SpuriousLocationType1_2","SpuriousLocationType1_3","SpuriousLocationType2_1","SpuriousLocationType2_2","SpuriousLocationType2_3"]:
             hparams = hparams_dict[dataset][algo].replace("batchsize", str(batch_size)).replace("archused", arch)
