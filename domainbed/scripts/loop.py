@@ -139,4 +139,4 @@ for algo in ["ERM","GroupDRO","IRM","CORAL","CausIRL_CORAL","MMD"]: #
     for dataset in ["SpuriousLocationType1_1","SpuriousLocationType1_2","SpuriousLocationType1_3"]:
         hparams = hparams_dict[dataset][algo].replace("\n", "").replace(" ", "")
         print(f"Train {algo} on {dataset}")
-        os.system(f"""python3 -m domainbed.scripts.train_n --data_dir={data_dir}  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir final_output --n_iter 3""")
+        os.system(f"""python3 -m domainbed.scripts.train_n --data_dir={data_dir}  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir type1_final_output --n_iter 3""")

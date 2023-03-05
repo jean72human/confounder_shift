@@ -419,9 +419,9 @@ class OODBenchmark(MultipleDomainDataset):
         if isinstance(train_combinations, dict):
             for_each_class_group = []
             cg_index = 0
-            for ind, (classes,comb_list) in enumerate(train_combinations.items()):
+            for classes,comb_list in train_combinations.items():
                 for_each_class_group.append([])
-                for (location,limit) in comb_list:
+                for ind, (location,limit) in enumerate(comb_list):
 
                     path = os.path.join(root_dir, f"{0}/{location}/")
                     if self.type1: path = os.path.join(root_dir, f"{ind}/{location}/")
@@ -450,10 +450,9 @@ class OODBenchmark(MultipleDomainDataset):
                     for_each_class_group[k][group] for k in range(len(for_each_class_group))
                 ]))
         else:
-            for ind,location in enumerate(train_combinations):
+            for location in train_combinations:
 
                 path = os.path.join(root_dir, f"{0}/{location}/")
-                if self.type1: path = os.path.join(root_dir, f"{ind}/{location}/")
                 data = ImageFolder(
                     root=path, transform=train_transforms
                 )#, is_valid_file=lambda x: find_match(x)>dataset_lower_bound and find_match(x)>0
@@ -464,9 +463,9 @@ class OODBenchmark(MultipleDomainDataset):
         if isinstance(test_combinations, dict):
             for_each_class_group = []
             cg_index = 0
-            for ind, (classes,comb_list) in enumerate(test_combinations.items()):
+            for classes,comb_list in test_combinations.items():
                 for_each_class_group.append([])
-                for location in comb_list:
+                for ind,location in enumerate(comb_list):
 
                     path = os.path.join(root_dir, f"{0}/{location}/")
                     if self.type1: path = os.path.join(root_dir, f"{ind}/{location}/")
@@ -498,8 +497,8 @@ class OODBenchmark(MultipleDomainDataset):
         test_data = ConcatDataset(test_data_list)
  
         self.datasets = [test_data] + train_data_list
-        # for k,dataset in enumerate(self.datasets): 
-        #     print(f"Group {k+1}: {len(dataset)} images")
+        for k,dataset in enumerate(self.datasets): 
+            print(f"Group {k+1}: {len(dataset)} images")
 
 
 class LocationShift1(OODBenchmark):

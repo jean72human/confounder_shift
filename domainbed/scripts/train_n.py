@@ -80,8 +80,8 @@ if __name__ == "__main__":
         print('\t{}: {}'.format(k, v))
 
     os.makedirs(args.output_dir, exist_ok=True)
-    sys.stdout = misc.Tee(os.path.join(args.output_dir, f'{args.hparams["arch"]}_{args.dataset}_{args.algorithm}_out.txt'))
-    sys.stderr = misc.Tee(os.path.join(args.output_dir, f'{args.hparams["arch"]}_{args.dataset}_{args.algorithm}_err.txt'))
+    sys.stdout = misc.Tee(os.path.join(args.output_dir, f'{hparams["arch"]}_{args.dataset}_{args.algorithm}_out.txt'))
+    sys.stderr = misc.Tee(os.path.join(args.output_dir, f'{hparams["arch"]}_{args.dataset}_{args.algorithm}_err.txt'))
 
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
@@ -283,7 +283,7 @@ if __name__ == "__main__":
             colwidth=12)
         best_list.append(best_results)
 
-        save_checkpoint(f'{args.hparams["arch"]}_{args.dataset}_{args.algorithm}_model.pkl')
+        save_checkpoint(f'{hparams["arch"]}_{args.dataset}_{args.algorithm}_model.pkl')
 
     print()
     average_results = {
