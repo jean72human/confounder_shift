@@ -12,11 +12,11 @@ parser.add_argument('--seed', type=int, default=1)
 
 args = parser.parse_args()
 
-data_dir = "/home/aengusl/Desktop/Projects/OOD_workshop/Stable_Diffusion_Generation/gen_images/datadir"
-batch_size = 32
+data_dir = "./data/datadir"
+batch_size = 128
 
 hparams_dict = {
-    "SpuriousLocationType1_1": {
+    "O2O_easy": {
         "ERM": """{"batch_size": batchsize, 
                 "class_balanced": false, 
                 "data_augmentation": true, 
@@ -33,9 +33,9 @@ hparams_dict = {
                 "arch": "archused", 
                 "resnet_dropout": 0.1,
                 "weight_decay": 1.1975155295174919e-06,
-                "mmd_gamma": 7.289784897124338} """,
+                "mmd_gamma": 5.636749849666358} """,
     },
-    "SpuriousLocationType2_1": {
+    "M2M_hard": {
         "ERM": """{"batch_size": batchsize, 
                 "class_balanced": false, 
                 "data_augmentation": true, 
@@ -56,16 +56,16 @@ hparams_dict = {
     }
 }
 
-hparams_dict["SpuriousLocationType1_2"] = hparams_dict["SpuriousLocationType1_1"]
-hparams_dict["SpuriousLocationType1_3"] = hparams_dict["SpuriousLocationType1_1"]
+hparams_dict["O2O_medium"] = hparams_dict["O2O_easy"]
+hparams_dict["O2O_hard"] = hparams_dict["O2O_easy"]
 
-hparams_dict["SpuriousLocationType2_2"] = hparams_dict["SpuriousLocationType2_1"]
-hparams_dict["SpuriousLocationType2_3"] = hparams_dict["SpuriousLocationType2_1"]
+hparams_dict["M2M_easy"] = hparams_dict["M2M_hard"]
+hparams_dict["M2M_medium"] = hparams_dict["M2M_hard"]
 
 for arch in ["resnet50"]:
-    for algo in ["ERM","MMD"]: 
-        for dataset in ["SpuriousLocationType1_1","SpuriousLocationType1_2","SpuriousLocationType1_3","SpuriousLocationType2_1","SpuriousLocationType2_2","SpuriousLocationType2_3"]:
+    for algo in ["MMD"]: 
+        for dataset in ["O2O_easy","O2O_medium","O2O_hard","M2M_hard","M2M_easy","M2M_medium"]:
             hparams = hparams_dict[dataset][algo].replace("batchsize", str(batch_size)).replace("archused", arch)
             hparams = hparams.replace("\n", "").replace(" ", "")
             print(f"Train {algo} on {dataset}")
-            os.system(f"""python3 -m domainbed.scripts.train_n --data_dir={data_dir}  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir final_output --n_iter 3""")
+            os.system(f"""python3 -m domainbed.scripts.train_n --data_dir={data_dir}  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir new_resnet50_final_output --n_iter 3""")

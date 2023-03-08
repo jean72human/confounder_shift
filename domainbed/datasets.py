@@ -510,6 +510,43 @@ class LocationShift1(OODBenchmark):
         super().__init__(exp1_TI['train_combinations'], exp1_TI['test_combinations'], root_dir, hparams["data_augmentation"])
 
 
+def O2O_easy(root_dir, test_envs, hparams):
+    filename = "sc11.pth"
+    path = os.path.join(root_dir,filename)
+    dataset = torch.load(path)
+    return dataset
+
+def O2O_medium(root_dir, test_envs, hparams):
+    filename = "sc12.pth"
+    path = os.path.join(root_dir,filename)
+    dataset = torch.load(path)
+    return dataset
+
+def O2O_hard(root_dir, test_envs, hparams):
+    filename = "sc13.pth"
+    path = os.path.join(root_dir,filename)
+    dataset = torch.load(path)
+    return dataset
+
+def M2M_hard(root_dir, test_envs, hparams):
+    filename = "sc21.pth"
+    path = os.path.join(root_dir,filename)
+    dataset = torch.load(path)
+    return dataset
+
+def M2M_easy(root_dir, test_envs, hparams):
+    filename = "sc22.pth"
+    path = os.path.join(root_dir,filename)
+    dataset = torch.load(path)
+    return dataset
+
+def M2M_medium(root_dir, test_envs, hparams):
+    filename = "sc23.pth"
+    path = os.path.join(root_dir,filename)
+    dataset = torch.load(path)
+    return dataset
+
+
 class SpuriousLocationType1_1(OODBenchmark):
     ENVIRONMENTS = ["Jungle","SC_group_1","SC_group_2"]
     def __init__(self, root_dir, test_envs, hparams):
