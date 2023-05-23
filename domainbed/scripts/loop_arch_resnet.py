@@ -12,11 +12,11 @@ parser.add_argument('--seed', type=int, default=1)
 
 args = parser.parse_args()
 
-data_dir = "./data/datadir"
+data_dir = "./data/spawrious224"
 batch_size = 128
 
 hparams_dict = {
-    "O2O_easy": {
+    "SpawriousO2O_easy": {
         "ERM": """{"batch_size": batchsize, 
                 "class_balanced": false, 
                 "data_augmentation": true, 
@@ -25,6 +25,25 @@ hparams_dict = {
                 "arch": "archused", 
                 "resnet_dropout": 0.1,
                 "weight_decay": 1.1975155295174919e-06}""",
+        "GroupDRO": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.00016629177873519647, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 1.1975155295174919e-06,
+                "groupdro_eta": 0.0053050580120662895} """,
+        "IRM": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.00016629177873519647, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 1.1975155295174919e-06,
+                "irm_lambda": 1.8838285530562104,
+                "irm_penalty_anneal_iters": 247} """,
         "MMD": """{"batch_size": batchsize, 
                 "class_balanced": false, 
                 "data_augmentation": true, 
@@ -33,9 +52,27 @@ hparams_dict = {
                 "arch": "archused", 
                 "resnet_dropout": 0.1,
                 "weight_decay": 1.1975155295174919e-06,
-                "mmd_gamma": 5.636749849666358} """,
+                "mmd_gamma": 7.289784897124338} """,
+        "CORAL": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.00016629177873519647, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 1.1975155295174919e-06,
+                "mmd_gamma": 6.9018246989615895} """,
+        "CausIRL_CORAL": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.00016629177873519647, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 1.1975155295174919e-06,
+                "mmd_gamma": 3.5146823420446407} """,
     },
-    "M2M_hard": {
+    "SpawriousM2M_hard": {
         "ERM": """{"batch_size": batchsize, 
                 "class_balanced": false, 
                 "data_augmentation": true, 
@@ -44,6 +81,25 @@ hparams_dict = {
                 "arch": "archused", 
                 "resnet_dropout": 0.1,
                 "weight_decay": 2.7643974709171963e-05}""",
+        "GroupDRO": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.0001653813153854724, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 2.7643974709171963e-05,
+                "groupdro_eta": 0.013378423587817576} """,
+        "IRM": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.0001653813153854724, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 2.7643974709171963e-05,
+                "irm_lambda": 29.3676220201571,
+                "irm_penalty_anneal_iters": 3001} """,
         "MMD": """{"batch_size": batchsize, 
                 "class_balanced": false, 
                 "data_augmentation": true, 
@@ -53,18 +109,36 @@ hparams_dict = {
                 "resnet_dropout": 0.1,
                 "weight_decay": 2.7643974709171963e-05,
                 "mmd_gamma": 1.0215072228839979} """,
+        "CORAL": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.0001653813153854724, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 2.7643974709171963e-05,
+                "mmd_gamma": 0.5870292457165399} """,
+        "CausIRL_CORAL": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.0001653813153854724, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 2.7643974709171963e-05,
+                "mmd_gamma": 0.5870292457165399} """,
     }
 }
 
-hparams_dict["O2O_medium"] = hparams_dict["O2O_easy"]
-hparams_dict["O2O_hard"] = hparams_dict["O2O_easy"]
+hparams_dict["SpawriousO2O_medium"] = hparams_dict["SpawriousO2O_easy"]
+hparams_dict["SpawriousO2O_hard"] = hparams_dict["SpawriousO2O_easy"]
 
-hparams_dict["M2M_easy"] = hparams_dict["M2M_hard"]
-hparams_dict["M2M_medium"] = hparams_dict["M2M_hard"]
+hparams_dict["SpawriousM2M_easy"] = hparams_dict["SpawriousM2M_hard"]
+hparams_dict["SpawriousM2M_medium"] = hparams_dict["SpawriousM2M_hard"]
 
 for arch in ["resnet50"]:
-    for algo in ["MMD"]: 
-        for dataset in ["O2O_easy","O2O_medium","O2O_hard","M2M_hard","M2M_easy","M2M_medium"]:
+    for algo in ["ERM","GroupDRO","IRM","CORAL","CausIRL_CORAL","MMD"]: 
+        for dataset in ["SpawriousO2O_easy","SpawriousO2O_medium","SpawriousO2O_hard","SpawriousM2M_hard","SpawriousM2M_easy","SpawriousM2M_medium"]:
             hparams = hparams_dict[dataset][algo].replace("batchsize", str(batch_size)).replace("archused", arch)
             hparams = hparams.replace("\n", "").replace(" ", "")
             print(f"Train {algo} on {dataset}")
