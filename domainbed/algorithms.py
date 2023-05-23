@@ -141,6 +141,8 @@ class FLR(Algorithm):
         )
 
     def update(self, minibatches, unlabeled=None, retrain=False):
+        # minibatch and unlabeled are the same type of object
+        # TODO: study this
         if retrain:
             data_batches = unlabeled
         else:
@@ -158,6 +160,53 @@ class FLR(Algorithm):
     def predict(self, x):
         return self.network(x)
 
+class LLR(Algorithm):
+    """
+    Empirical Risk Minimization (ERM)
+    """
+
+    def __init__(self, input_shape, num_classes, num_domains, hparams):
+        super(ERM, self).__init__(input_shape, num_classes, num_domains,
+                                  hparams)
+        self.featurizer = networks.Featurizer(input_shape, self.hparams)
+        self.classifier = networks.Classifier(
+            self.featurizer.n_outputs,
+            num_classes,
+            self.hparams['nonlinear_classifier'])
+
+        self.network = nn.Sequential(self.featurizer, self.classifier)
+        self.optimizer = torch.optim.Adam(
+            self.network.parameters(),
+            lr=self.hparams["lr"],
+            weight_decay=self.hparams['weight_decay']
+        )
+
+    def update(self, minibatches, unlabeled=None, retrain=False):
+        # minibatch and unlabeled are the same type of object
+        # TODO: study this
+        if retrain:
+            data_batches = unlabeled
+            all_x = torch.cat([x for x, y in data_batches])
+            all_features = self.featurizer(all_x)
+            for param in self.featurizer.parameters():
+                param.requires_grad = False
+            all_y = torch.cat([y for x, y in data_batches])
+            loss = F.cross_entropy(self.classifier(all_features), all_y)
+        else:
+            data_batches = minibatches
+            all_x = torch.cat([x for x, y in data_batches])
+            all_y = torch.cat([y for x, y in data_batches])
+            loss = F.cross_entropy(self.predict(all_x), all_y)
+
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return {'loss': loss.item()}
+
+    def predict(self, x):
+        return self.network(x)
 
 class Fish(Algorithm):
     """
