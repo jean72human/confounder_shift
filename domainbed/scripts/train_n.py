@@ -40,6 +40,8 @@ if __name__ == "__main__":
         help='Seed for everything else')
     parser.add_argument('--steps', type=int, default=None,
         help='Number of steps. Default is dataset-dependent.')
+    parser.add_argument('--retrain_steps', type=int, default=0,
+        help='Number of layer retraining steps if using FLR or LLR.')
     parser.add_argument('--checkpoint_freq', type=int, default=None,
         help='Checkpoint every N steps. Default is dataset-dependent.')
     parser.add_argument('--test_envs', type=int, nargs='+', default=[0])
@@ -197,6 +199,7 @@ if __name__ == "__main__":
         steps_per_epoch = min([len(env)/hparams['batch_size'] for env,_ in in_splits])
 
         n_steps = args.steps or dataset.N_STEPS
+        retrain_steps = args.retrain_steps
         checkpoint_freq = args.checkpoint_freq or dataset.CHECKPOINT_FREQ
 
         def save_checkpoint(filename):
@@ -215,7 +218,7 @@ if __name__ == "__main__":
 
         best_results = {}
         last_results_keys = None
-        for step in range(start_step, n_steps):
+        for step in range(start_step, n_steps+retrain_steps):
             step_start_time = time.time()
             minibatches_device = [(x.to(device), y.to(device))
                 for x,y in next(train_minibatches_iterator)]
@@ -224,7 +227,7 @@ if __name__ == "__main__":
                     for x,y in next(uda_minibatches_iterator)]
             else:
                 uda_device = None
-            if args.task == "domain_adaptation" and n_steps-step<=steps_per_epoch and args.algorithm in ['LLR','FLR']:
+            if args.task == "domain_adaptation" and step >= n_steps and args.algorithm in ['LLR','FLR']:
                 step_vals = algorithm.update(minibatches_device, uda_device, retrain=True)
             else:
                 step_vals = algorithm.update(minibatches_device, uda_device)
@@ -234,7 +237,7 @@ if __name__ == "__main__":
             for key, val in step_vals.items():
                 checkpoint_vals[key].append(val)
 
-            if (step % checkpoint_freq == 0) or (step == n_steps - 1):
+            if (step % checkpoint_freq == 0) or (step >= n_steps - 1) :
                 results = {
                     'step': step,
                     'epoch': step / steps_per_epoch,
