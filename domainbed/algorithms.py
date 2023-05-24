@@ -125,7 +125,7 @@ class FLR(Algorithm):
     """
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
-        super(ERM, self).__init__(input_shape, num_classes, num_domains,
+        super(FLR, self).__init__(input_shape, num_classes, num_domains,
                                   hparams)
         self.featurizer = networks.Featurizer(input_shape, self.hparams)
         self.classifier = networks.Classifier(
@@ -142,7 +142,6 @@ class FLR(Algorithm):
 
     def update(self, minibatches, unlabeled=None, retrain=False):
         # minibatch and unlabeled are the same type of object
-        # TODO: study this
         if retrain:
             data_batches = unlabeled
         else:
@@ -166,7 +165,7 @@ class LLR(Algorithm):
     """
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
-        super(ERM, self).__init__(input_shape, num_classes, num_domains,
+        super(LLR, self).__init__(input_shape, num_classes, num_domains,
                                   hparams)
         self.featurizer = networks.Featurizer(input_shape, self.hparams)
         self.classifier = networks.Classifier(
@@ -183,7 +182,7 @@ class LLR(Algorithm):
 
     def update(self, minibatches, unlabeled=None, retrain=False):
         # minibatch and unlabeled are the same type of object
-        # TODO: study this
+        # TODO: need to implement weight re initialization
         if retrain:
             data_batches = unlabeled
             all_x = torch.cat([x for x, y in data_batches])
