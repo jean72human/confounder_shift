@@ -38,9 +38,11 @@ if __name__ == "__main__":
         'random_hparams).')
     parser.add_argument('--seed', type=int, default=0,
         help='Seed for everything else')
-    parser.add_argument('--steps', type=int, default=None,
+    # TODO: remove this after testing is done
+    parser.add_argument('--steps', type=int, default=1,
         help='Number of steps. Default is dataset-dependent.')
-    parser.add_argument('--retrain_steps', type=int, default=0,
+    # TODO: remove this after testing is done
+    parser.add_argument('--retrain_steps', type=int, default=100,
         help='Number of layer retraining steps if using FLR or LLR.')
     parser.add_argument('--checkpoint_freq', type=int, default=None,
         help='Checkpoint every N steps. Default is dataset-dependent.')
@@ -112,7 +114,9 @@ if __name__ == "__main__":
     # generalization algorithms should create the same 'uda-splits', which will
     # be discared at training.
 
-
+    # TODO: remove this after testing is done
+    args.task = "domain_adaptation"
+    args.uda_holdout_fraction = 0.2
     best_list = []
 
     for iteration in range(args.n_iter):
@@ -198,8 +202,12 @@ if __name__ == "__main__":
 
         steps_per_epoch = min([len(env)/hparams['batch_size'] for env,_ in in_splits])
 
-        n_steps = args.steps or dataset.N_STEPS
-        retrain_steps = args.retrain_steps
+        # n_steps = args.steps or dataset.N_STEPS
+        # TODO: remove this after testing is done
+        n_steps = 1
+        # retrain_steps = args.retrain_steps
+        retrain_steps = 100
+    
         checkpoint_freq = args.checkpoint_freq or dataset.CHECKPOINT_FREQ
 
         def save_checkpoint(filename):
@@ -219,6 +227,7 @@ if __name__ == "__main__":
         best_results = {}
         last_results_keys = None
         for step in range(start_step, n_steps+retrain_steps):
+            print("Step {}/{}".format(step, n_steps+retrain_steps))
             step_start_time = time.time()
             minibatches_device = [(x.to(device), y.to(device))
                 for x,y in next(train_minibatches_iterator)]
@@ -228,7 +237,12 @@ if __name__ == "__main__":
             else:
                 uda_device = None
             if args.task == "domain_adaptation" and step >= n_steps and args.algorithm in ['LLR','FLR']:
-                step_vals = algorithm.update(minibatches_device, uda_device, retrain=True)
+                if step == n_steps:
+                    print("Retraining and reinitializing...")
+                    step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, reinit=True)
+                else:
+                    print("Retraining...")
+                    step_vals = algorithm.update(minibatches_device, uda_device, retrain=True)
             else:
                 step_vals = algorithm.update(minibatches_device, uda_device)
 

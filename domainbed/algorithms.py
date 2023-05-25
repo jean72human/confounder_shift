@@ -60,6 +60,29 @@ def get_algorithm_class(algorithm_name):
         raise NotImplementedError("Algorithm not found: {}".format(algorithm_name))
     return globals()[algorithm_name]
 
+import torch.nn as nn
+import torch.nn.init as init
+# import networks  # Assuming networks is a custom module containing your Classifier class
+
+def xavier_uniform_init(module):
+    if isinstance(module, nn.Linear):
+        init.xavier_uniform_(module.weight)
+        if module.bias is not None:
+            init.zeros_(module.bias)
+
+def kaiming_normal_init(module):
+    if isinstance(module, nn.Linear):
+        init.kaiming_normal_(module.weight)
+        if module.bias is not None:
+            init.zeros_(module.bias)
+
+def zero_init(module):
+    if isinstance(module, nn.Linear):
+        module.weight.data.fill_(0.0)
+        if module.bias is not None:
+            module.bias.data.fill_(0.0)
+
+
 class Algorithm(torch.nn.Module):
     """
     A subclass of Algorithm implements a domain generalization algorithm.
@@ -172,17 +195,33 @@ class LLR(Algorithm):
             self.featurizer.n_outputs,
             num_classes,
             self.hparams['nonlinear_classifier'])
-
         self.network = nn.Sequential(self.featurizer, self.classifier)
         self.optimizer = torch.optim.Adam(
             self.network.parameters(),
             lr=self.hparams["lr"],
             weight_decay=self.hparams['weight_decay']
         )
+        self.classes = num_classes
 
-    def update(self, minibatches, unlabeled=None, retrain=False):
+    def update(self, minibatches, unlabeled=None, retrain=False, reinit=False, initialization_method='xavier_uniform'):
         # minibatch and unlabeled are the same type of object
         # TODO: need to implement weight re initialization
+        device = "cuda" if minibatches[0][0].is_cuda else "cpu"
+        if reinit:
+            self.classifier = networks.Classifier(
+                self.featurizer.n_outputs,
+                self.classes,
+                self.hparams['nonlinear_classifier'])
+            self.classifier.to(device)
+            if initialization_method == 'xavier_uniform':
+                self.classifier.apply(xavier_uniform_init)
+            elif initialization_method == 'kaiming_normal':
+                self.classifier.apply(kaiming_normal_init)
+            elif initialization_method == 'zero':
+                self.classifier.apply(zero_init)
+            else:
+                raise ValueError("Invalid initialization method.")
+            self.network = nn.Sequential(self.featurizer, self.classifier)
         if retrain:
             data_batches = unlabeled
             all_x = torch.cat([x for x, y in data_batches])
