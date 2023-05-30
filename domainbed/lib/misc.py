@@ -80,6 +80,7 @@ class MovingAverage:
 def make_weights_for_balanced_classes(dataset):
     counts = Counter()
     classes = []
+    print(dataset[0])
     for _, y in dataset:
         y = int(y)
         counts[y] += 1

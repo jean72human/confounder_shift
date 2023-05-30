@@ -52,6 +52,7 @@ ALGORITHMS = [
     'CausIRL_CORAL',
     'CausIRL_MMD',
     'FLR',
+    'LLR',
 ]
 
 def get_algorithm_class(algorithm_name):

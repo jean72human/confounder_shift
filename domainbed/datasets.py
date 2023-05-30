@@ -397,6 +397,7 @@ class SpawriousBenchmark(MultipleDomainDataset):
         self.type1 = type1
         train_datasets, test_datasets = self._prepare_data_lists(train_combinations, test_combinations, root_dir, augment)
         self.datasets = [ConcatDataset(test_datasets)] + train_datasets
+        self.domain_adaptation_ds = ConcatDataset(self._prepare_data_lists_for_domain_adaptation(test_combinations, root_dir, augment))
 
     # Prepares the train and test data lists by applying the necessary transformations.
     def _prepare_data_lists(self, train_combinations, test_combinations, root_dir, augment):
@@ -461,6 +462,66 @@ class SpawriousBenchmark(MultipleDomainDataset):
 
         return data_list
     
+    def _prepare_data_lists_for_domain_adaptation(self, test_combinations, root_dir, augment):
+        test_transforms = transforms.Compose([
+            transforms.Resize((self.input_shape[1], self.input_shape[2])),
+            transforms.transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        
+        if augment:
+            train_transforms = transforms.Compose([
+                transforms.Resize((self.input_shape[1], self.input_shape[2])),
+                transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(0.3, 0.3, 0.3, 0.3),
+                transforms.RandomGrayscale(),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        else:
+            train_transforms = test_transforms
+
+        test_data_list = self._create_data_list_for_domain_adaptation(test_combinations, root_dir, train_transforms)
+
+        return test_data_list
+
+
+    def _create_data_list_for_domain_adaptation(self, combinations, root_dir, transforms):
+        data_list = []
+        if isinstance(combinations, dict):
+            
+            # Build class groups for a given set of combinations, root directory, and transformations.
+            for_each_class_group = []
+            cg_index = 0
+            for classes, comb_list in combinations.items():
+                for_each_class_group.append([])
+                for ind, location_limit in enumerate(comb_list):
+                    if isinstance(location_limit, tuple):
+                        location, limit = location_limit
+                    else:
+                        location, limit = location_limit, None
+                    cg_data_list = []
+                    for cls in classes:
+                        path = os.path.join(root_dir, f"domain_adaptation_ds/{location}/{cls}")
+                        data = CustomImageFolder(folder_path=path, class_index=self.class_list.index(cls), limit=limit, transform=transforms)
+                        cg_data_list.append(data)
+                    
+                    for_each_class_group[cg_index].append(ConcatDataset(cg_data_list))
+                cg_index += 1
+
+            for group in range(len(for_each_class_group[0])):
+                data_list.append(
+                    ConcatDataset(
+                        [for_each_class_group[k][group] for k in range(len(for_each_class_group))]
+                    )
+                )
+        else:
+            for location in combinations:
+                path = os.path.join(root_dir, f"{0}/{location}/")
+                data = ImageFolder(root=path, transform=transforms)
+                data_list.append(data)
+
+        return data_list
     
     # Buils combination dictionary for o2o datasets
     def build_type1_combination(self,group,test,filler):

@@ -58,6 +58,12 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
+    # TODO: remove this after testing is done
+    args.task = "domain_adaptation"
+    args.dataset = "SpawriousM2M_easy"
+    args.algorithm = "LLR"
+    args.data_dir = "/home/aengusl/Desktop/Projects/OOD_workshop/DomainBed-SP/data/spawrious224"
+
     print("Environment:")
     print("\tPython: {}".format(sys.version.split(" ")[0]))
     print("\tPyTorch: {}".format(torch.__version__))
@@ -92,6 +98,7 @@ if __name__ == "__main__":
 
     if torch.cuda.is_available():
         device = args.device
+        print("Using device {}.".format(device))
     else:
         device = "cpu"
 
@@ -114,9 +121,6 @@ if __name__ == "__main__":
     # generalization algorithms should create the same 'uda-splits', which will
     # be discared at training.
 
-    # TODO: remove this after testing is done
-    args.task = "domain_adaptation"
-    args.uda_holdout_fraction = 0.2
     best_list = []
 
     for iteration in range(args.n_iter):
@@ -157,7 +161,14 @@ if __name__ == "__main__":
                 uda_splits.append((uda, uda_weights))
 
         if args.task == "domain_adaptation" and len(uda_splits) == 0:
-            raise ValueError("Not enough unlabeled samples for domain adaptation.")
+            if args.dataset.startswith("Spawrious"):
+                print('Using spawrious data for domain adaptation.')
+                _, uda = misc.split_dataset(dataset.domain_adaptation_ds,0)
+                # uda_weights = misc.make_weights_for_balanced_classes(uda)
+                uda_weights = None
+                uda_splits = [(uda, uda_weights)]
+            else:
+                raise ValueError("Not enough unlabeled samples for domain adaptation.")
 
         train_loaders = [InfiniteDataLoader(
             dataset=env,
@@ -166,14 +177,20 @@ if __name__ == "__main__":
             num_workers=dataset.N_WORKERS)
             for i, (env, env_weights) in enumerate(in_splits)
             if i not in args.test_envs]
-
+        print('building uda loaders')
         uda_loaders = [InfiniteDataLoader(
             dataset=env,
             weights=env_weights,
             batch_size=hparams['batch_size'],
             num_workers=dataset.N_WORKERS)
             for i, (env, env_weights) in enumerate(uda_splits)]
-
+        # uda_loaders = [FastDataLoader(
+        #     dataset=env,
+        #     # weights=env_weights,
+        #     batch_size=hparams['batch_size'],
+        #     num_workers=dataset.N_WORKERS)
+        #     for i, (env, env_weights) in enumerate(uda_splits)]
+        print('building out loaders')        
         eval_loaders = [FastDataLoader(
             dataset=env,
             batch_size=64,
@@ -202,11 +219,8 @@ if __name__ == "__main__":
 
         steps_per_epoch = min([len(env)/hparams['batch_size'] for env,_ in in_splits])
 
-        # n_steps = args.steps or dataset.N_STEPS
-        # TODO: remove this after testing is done
-        n_steps = 1
-        # retrain_steps = args.retrain_steps
-        retrain_steps = 100
+        n_steps = args.steps or dataset.N_STEPS
+        retrain_steps = args.retrain_steps
     
         checkpoint_freq = args.checkpoint_freq or dataset.CHECKPOINT_FREQ
 
@@ -321,3 +335,5 @@ if __name__ == "__main__":
 
     with open(os.path.join(args.output_dir, 'done'), 'w') as f:
         f.write('done')
+
+pass

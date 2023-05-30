@@ -3,12 +3,13 @@ import time
 import argparse
 
 import warnings
+
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(description='Domain generalization')
+parser = argparse.ArgumentParser(description="Domain generalization")
 
-parser.add_argument('--device', type=str, default='cuda:0')
-parser.add_argument('--seed', type=int, default=1)
+parser.add_argument("--device", type=str, default="cuda:0")
+parser.add_argument("--seed", type=int, default=1)
 
 args = parser.parse_args()
 
@@ -18,6 +19,14 @@ batch_size = 128
 hparams_dict = {
     "SpawriousO2O_easy": {
         "ERM": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.00016629177873519647, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 1.1975155295174919e-06}""",
+        "LLR": """{"batch_size": batchsize, 
                 "class_balanced": false, 
                 "data_augmentation": true, 
                 "lr": 0.00016629177873519647, 
@@ -81,6 +90,14 @@ hparams_dict = {
                 "arch": "archused", 
                 "resnet_dropout": 0.1,
                 "weight_decay": 2.7643974709171963e-05}""",
+        "LLR": """{"batch_size": batchsize, 
+                "class_balanced": false, 
+                "data_augmentation": true, 
+                "lr": 0.0001653813153854724, 
+                "nonlinear_classifier": false, 
+                "arch": "archused", 
+                "resnet_dropout": 0.1,
+                "weight_decay": 2.7643974709171963e-05}""",
         "GroupDRO": """{"batch_size": batchsize, 
                 "class_balanced": false, 
                 "data_augmentation": true, 
@@ -127,7 +144,7 @@ hparams_dict = {
                 "resnet_dropout": 0.1,
                 "weight_decay": 2.7643974709171963e-05,
                 "mmd_gamma": 0.5870292457165399} """,
-    }
+    },
 }
 
 hparams_dict["SpawriousO2O_medium"] = hparams_dict["SpawriousO2O_easy"]
@@ -136,10 +153,25 @@ hparams_dict["SpawriousO2O_hard"] = hparams_dict["SpawriousO2O_easy"]
 hparams_dict["SpawriousM2M_easy"] = hparams_dict["SpawriousM2M_hard"]
 hparams_dict["SpawriousM2M_medium"] = hparams_dict["SpawriousM2M_hard"]
 
-for arch in ["resnet50"]:
-    for algo in ["ERM","GroupDRO","IRM","CORAL","CausIRL_CORAL","MMD"]: 
-        for dataset in ["SpawriousO2O_easy","SpawriousO2O_medium","SpawriousO2O_hard","SpawriousM2M_hard","SpawriousM2M_easy","SpawriousM2M_medium"]:
-            hparams = hparams_dict[dataset][algo].replace("batchsize", str(batch_size)).replace("archused", arch)
+# for arch in ["resnet50"]:
+for arch in ["resnet18"]:
+    # for algo in ["ERM","GroupDRO","IRM","CORAL","CausIRL_CORAL","MMD"]:
+    for algo in ["LLR"]:
+        for dataset in [
+            "SpawriousO2O_easy",
+        #     "SpawriousO2O_medium",
+        #     "SpawriousO2O_hard",
+        #     "SpawriousM2M_hard",
+        #     "SpawriousM2M_easy",
+        #     "SpawriousM2M_medium",
+        ]:
+            hparams = (
+                hparams_dict[dataset][algo]
+                .replace("batchsize", str(batch_size))
+                .replace("archused", arch)
+            )
             hparams = hparams.replace("\n", "").replace(" ", "")
             print(f"Train {algo} on {dataset}")
-            os.system(f"""python3 -m domainbed.scripts.train_n --data_dir={data_dir}  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir new_resnet50_final_output --n_iter 3""")
+            os.system(
+                f"""python3 -m domainbed.scripts.train_n --data_dir={data_dir}  --algorithm {algo} --test_env 0 --dataset {dataset} --hparams='{hparams}' --seed {args.seed} --output_dir new_resnet50_final_output --n_iter 3"""
+            )
