@@ -53,6 +53,7 @@ ALGORITHMS = [
     'CausIRL_MMD',
     'FLR',
     'LLR',
+    'CBFT',
 ]
 
 def get_algorithm_class(algorithm_name):
@@ -207,9 +208,9 @@ class LLR(Algorithm):
     def update(self, minibatches, unlabeled=None, retrain=False, reinit=False, initialization_method='xavier_uniform'):
         # minibatch and unlabeled are the same type of object
         device = "cuda" if minibatches[0][0].is_cuda else "cpu"
-        all_data = torch.cat([(x, y) for x, y in data_batches])
-        all_x = torch.cat([x for x, y in all_data])
-        all_y = torch.cat([y for x, y in all_data])
+        data_batches = minibatches
+        all_x = torch.cat([x for x, y in data_batches])
+        all_y = torch.cat([y for x, y in data_batches])
         if reinit:
             self.classifier = networks.Classifier(
                 self.featurizer.n_outputs,
@@ -262,63 +263,74 @@ class CBFT(Algorithm):
         self.loss_margin = hparams.get("loss_margin", 1.0)
         self.interpolated_network = None  # The interpolated network should be initialized.
         self.classes = num_classes
+        self.input_shape = input_shape
 
     # TODO: implement all of this
-    def update(self, minibatches, epoch, unlabeled=None, retrain=False, reinit=False, initialization_method='xavier_uniform'):
+    def update(self, minibatches, unlabeled=None, epoch=10, retrain=False, reinit=False, initialization_method='xavier_uniform'):
         # minibatch and unlabeled are the same type of object
         device = "cuda" if minibatches[0][0].is_cuda else "cpu"
         if reinit:
-            self.classifier = networks.Classifier(
+            # self.classifier = networks.Classifier(
+            #     self.featurizer.n_outputs,
+            #     self.classes,
+            #     self.hparams['nonlinear_classifier'])
+            # self.classifier.to(device)
+            # if initialization_method == 'xavier_uniform':
+            #     self.classifier.apply(xavier_uniform_init)
+            # elif initialization_method == 'kaiming_normal':
+            #     self.classifier.apply(kaiming_normal_init)
+            # elif initialization_method == 'zero':
+            #     self.classifier.apply(zero_init)
+
+            # create a new linear layer with the same number of outputs as the old classifier, and copy the weights
+            self.old_classifier = networks.Classifier(
                 self.featurizer.n_outputs,
                 self.classes,
                 self.hparams['nonlinear_classifier'])
-            self.classifier.to(device)
-            if initialization_method == 'xavier_uniform':
-                self.classifier.apply(xavier_uniform_init)
-            elif initialization_method == 'kaiming_normal':
-                self.classifier.apply(kaiming_normal_init)
-            elif initialization_method == 'zero':
-                self.classifier.apply(zero_init)
-            elif initialization_method == 'CBFT':
-                self.old_classifier = self.classifier.clone()
-                self.old_classifier.to(device)
-                self.old_featurizer = self.featurizer.clone()
-                self.old_featurizer.to(device)
-                self.old_network = nn.Sequential(self.old_featurizer, self.old_classifier)
-                self.old_network.to(device)
-                self.interpolated_network = self.old_network.clone()
-                self.interpolated_network.to(device)
-                self.old_network.eval()
-                self.interpolated_network.train()
-            else:
-                raise ValueError("Invalid initialization method.")
+            self.old_classifier.to(device)
+            self.old_classifier.load_state_dict(self.classifier.state_dict())
+
+            # create a new feaurizer with the same number of outputs as the old featurizer, and copy the weights
+            self.old_featurizer = networks.Featurizer(self.input_shape, self.hparams)
+            self.old_featurizer.to(device)
+            self.old_featurizer.load_state_dict(self.featurizer.state_dict())
+
+            self.old_featurizer.to(device)
+            self.old_network = nn.Sequential(self.old_featurizer, self.old_classifier)
+            self.old_network.to(device)
+            self.interpolated_network = copy.deepcopy(self.old_network)
+            self.interpolated_network.to(device)
+            self.old_network.eval()
+            self.interpolated_network.train()
+            # else:
+            #     raise ValueError("Invalid initialization method.")
             self.network = nn.Sequential(self.featurizer, self.classifier)
-        if retrain:
+        if retrain and unlabeled is not None and self.interpolated_network is not None:
 
             new_data_batches = unlabeled
             old_data_batches = minibatches
 
-            all_new_data = torch.cat([(x,  y) for x, y in new_data_batches])
-            all_new_x = torch.cat([x for (x, y) in all_new_data])
-            all_new_y = torch.cat([y for (x, y) in all_new_data])
-            all_new_features = self.featurizer(all_new_x)
+            all_new_x = torch.cat([x for x, y in new_data_batches])
+            all_new_y = torch.cat([y for x, y in new_data_batches])
 
-            all_old_data = torch.cat([(x, y) for x, y in old_data_batches])
-            all_old_x = torch.cat([x for (x, y) in all_old_data])
-            all_old_y = torch.cat([y for (x, y) in all_old_data])
-            all_old_features = self.featurizer(all_old_x)
+            all_old_x = torch.cat([x for x, y in old_data_batches])
+            all_old_y = torch.cat([y for x, y in old_data_batches])
+
+            all_features_new_data = self.featurizer(all_new_x)
+            all_features_old_data = self.featurizer(all_old_x)
 
             n_classes = self.classifier.weight.shape[0]
             class_ids_new = {i: (all_new_y == i).nonzero().view(-1,1).type(torch.long) for i in range(n_classes)} 
             class_ids_old = {i: (all_old_x == i).nonzero().view(-1,1).type(torch.long) for i in range(n_classes)}
             
 
-            # Get interpolated network
             with torch.no_grad():
                 t = 0.5 + 0.5 * (torch.rand(1)).clip(-0.5, 0.5)[0]
                 for module_old, module_new, module_interpolated in zip(self.old_network.modules(), self.network.modules(), self.interpolated_network.modules()):
-                    module_interpolated.weight.data = t * module_old.weight.data + (1 - t) * module_new.weight.data
-                    module_interpolated.bias.data = t * module_old.bias.data + (1 - t) * module_new.bias.data
+                    if hasattr(module_old, 'weight') and hasattr(module_new, 'weight') and hasattr(module_interpolated, 'weight'):
+                        module_interpolated.weight.data = t * module_old.weight.data + (1 - t) * module_new.weight.data
+                    if hasattr(module_old, 'bias') and hasattr(module_new, 'bias') and hasattr(module_interpolated, 'bias') and module_interpolated.bias is not None:
+                        module_interpolated.bias.data = t * module_old.bias.data + (1 - t) * module_new.bias.data
                     
             # Get barrier loss: compute loss and backward in interpolated network
             self.interpolated_network.zero_grad()
@@ -327,12 +339,19 @@ class CBFT(Algorithm):
             loss = (self.loss_margin - F.cross_entropy(outputs_interpolated, all_old_y)).abs()
             loss.backward()
 
-            # Get barrier loss: associate gradients from interpolated network to new network
             with torch.no_grad():
                 for module_new, module_interpolated in zip(self.network.modules(), self.interpolated_network.modules()):
-                    module_new.weight.grad = (1-t) * module_interpolated.weight.grad
-                    module_new.bias.grad = (1-t) * module_interpolated.bias.grad
+                    if hasattr(module_interpolated, 'weight') and hasattr(module_interpolated.weight, 'grad'):
+                        module_new.weight.grad = (1-t) * module_interpolated.weight.grad
+                    if hasattr(module_interpolated, 'bias') and module_interpolated.bias is not None and hasattr(module_interpolated.bias, 'grad'):
+                        module_new.bias.grad = (1-t) * module_interpolated.bias.grad
 
+            # with torch.no_grad():
+            #     for module_new, module_interpolated in zip(self.network.modules(), self.interpolated_network.modules()):
+            #         if isinstance(module_interpolated, nn.Linear) and hasattr(module_interpolated.weight, 'grad'):
+            #             module_new.weight.grad = (1-t) * module_interpolated.weight.grad
+            #         if isinstance(module_interpolated, nn.Linear) and hasattr(module_interpolated.bias, 'grad'):
+            #             module_new.bias.grad = (1-t) * module_interpolated.bias.grad
             # Update network with barrier loss
             self.optimizer.step()
 
@@ -345,8 +364,10 @@ class CBFT(Algorithm):
                 for i in range(n_classes):
                     if (class_ids_new[i].shape[0] == 0 or class_ids_old[i].shape[0] == 0):
                         continue
-                    inv_loss += (F.normalize(all_new_features[class_ids_new[i][:,0]].mean(dim=0, keepdim=True), dim=1) - F.normalize(all_old_features[class_ids_old[i][:,0]].mean(dim=0, keepdim=True), dim=1)).norm().pow(2)
+                    inv_loss += (F.normalize(all_features_new_data[class_ids_new[i][:,0]].mean(dim=0, keepdim=True), dim=1) - F.normalize(all_features_old_data[class_ids_old[i][:,0]].mean(dim=0, keepdim=True), dim=1)).norm().pow(2)
+                # invariance loss
                 loss = inv_loss / n_classes
+                # fine tuning loss
                 loss += F.cross_entropy(self.network(all_new_x), all_new_y)
             
             # Update network with fine tuning loss and invariance loss
@@ -362,9 +383,8 @@ class CBFT(Algorithm):
 
         else:
             data_batches = minibatches
-            all_data = torch.cat([(x, y) for x, y in data_batches])
-            all_x = torch.cat([x for x, y in all_data])
-            all_y = torch.cat([y for x, y in all_data])
+            all_x = torch.cat([x for x, y in data_batches])
+            all_y = torch.cat([y for x, y in data_batches])
             loss = F.cross_entropy(self.predict(all_x), all_y)
             self.optimizer.zero_grad()
             loss.backward()
@@ -463,10 +483,10 @@ class CBFT(Algorithm):
         return {'loss_c': train_loss_c/(batch_idx+1), 'accuracy_c': 100. * correct_c/total_c, 'loss_nc': train_loss_nc/(batch_idx+1), 'accuracy_nc': 100. * correct_nc/total_nc}
 
 
-    def predict(self, x):
-        self.network.eval()
-        with torch.no_grad():
-            return self.network(x)
+    # def predict(self, x):
+    #     self.network.eval()
+    #     with torch.no_grad():
+    #         return self.network(x)
 
 
 class Fish(Algorithm):

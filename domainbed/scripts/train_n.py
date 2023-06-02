@@ -24,10 +24,11 @@ from domainbed.lib.fast_data_loader import InfiniteDataLoader, FastDataLoader
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Domain generalization')
-    parser.add_argument('--data_dir', type=str)
-    parser.add_argument('--dataset', type=str, default="RotatedMNIST")
-    parser.add_argument('--algorithm', type=str, default="ERM")
-    parser.add_argument('--task', type=str, default="domain_generalization",
+    # TODO: remove defaults
+    parser.add_argument('--data_dir', type=str, default='/home/gbetondji/Documents/ood_benchmark/data/spawrious224')
+    parser.add_argument('--dataset', type=str, default="SpawriousM2M_easy")
+    parser.add_argument('--algorithm', type=str, default="CBFT")
+    parser.add_argument('--task', type=str, default="domain_adaptation",
         choices=["domain_generalization", "domain_adaptation"])
     parser.add_argument('--hparams', type=str,
         help='JSON-serialized hparams dict')
@@ -57,12 +58,6 @@ if __name__ == "__main__":
     parser.add_argument('--n_iter', type=int, default=1)
     
     args = parser.parse_args()
-
-    # TODO: remove this after testing is done
-    args.task = "domain_adaptation"
-    args.dataset = "SpawriousM2M_easy"
-    args.algorithm = "LLR"
-    args.data_dir = "/home/aengusl/Desktop/Projects/OOD_workshop/DomainBed-SP/data/spawrious224"
 
     print("Environment:")
     print("\tPython: {}".format(sys.version.split(" ")[0]))
@@ -255,13 +250,13 @@ if __name__ == "__main__":
                 if step == n_steps:
                     print("Retraining and reinitializing...")
                     if args.algorithm == 'CBFT':
-                        step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, reinit=True, initialization_method='CBFT', epoch=step)
+                        step_vals = algorithm.update(minibatches_device, unlabeled=uda_device, retrain=True, reinit=True, initialization_method='CBFT', epoch=step)
                     else:
                         step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, reinit=True)
                 else:
                     print("Retraining...")
                     if args.algorithm == 'CBFT':
-                        step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, epoch=step)
+                        step_vals = algorithm.update(minibatches_device, unlabeled=uda_device, retrain=True, epoch=step)
                     else:
                         step_vals = algorithm.update(minibatches_device, uda_device, retrain=True)
             else:
