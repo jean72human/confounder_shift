@@ -250,13 +250,20 @@ if __name__ == "__main__":
                     for x,y in next(uda_minibatches_iterator)]
             else:
                 uda_device = None
-            if args.task == "domain_adaptation" and step >= n_steps and args.algorithm in ['LLR','FLR']:
+            # TODO: add CBFT to list of algorithms
+            if args.task == "domain_adaptation" and step >= n_steps and args.algorithm in ['LLR','FLR', 'CBFT']:
                 if step == n_steps:
                     print("Retraining and reinitializing...")
-                    step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, reinit=True)
+                    if args.algorithm == 'CBFT':
+                        step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, reinit=True, initialization_method='CBFT', epoch=step)
+                    else:
+                        step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, reinit=True)
                 else:
                     print("Retraining...")
-                    step_vals = algorithm.update(minibatches_device, uda_device, retrain=True)
+                    if args.algorithm == 'CBFT':
+                        step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, epoch=step)
+                    else:
+                        step_vals = algorithm.update(minibatches_device, uda_device, retrain=True)
             else:
                 step_vals = algorithm.update(minibatches_device, uda_device)
 

@@ -206,8 +206,10 @@ class LLR(Algorithm):
 
     def update(self, minibatches, unlabeled=None, retrain=False, reinit=False, initialization_method='xavier_uniform'):
         # minibatch and unlabeled are the same type of object
-        # TODO: need to implement weight re initialization
         device = "cuda" if minibatches[0][0].is_cuda else "cpu"
+        all_data = torch.cat([(x, y) for x, y in data_batches])
+        all_x = torch.cat([x for x, y in all_data])
+        all_y = torch.cat([y for x, y in all_data])
         if reinit:
             self.classifier = networks.Classifier(
                 self.featurizer.n_outputs,
@@ -225,16 +227,12 @@ class LLR(Algorithm):
             self.network = nn.Sequential(self.featurizer, self.classifier)
         if retrain:
             data_batches = unlabeled
-            all_x = torch.cat([x for x, y in data_batches])
             all_features = self.featurizer(all_x)
             for param in self.featurizer.parameters():
                 param.requires_grad = False
-            all_y = torch.cat([y for x, y in data_batches])
             loss = F.cross_entropy(self.classifier(all_features), all_y)
         else:
             data_batches = minibatches
-            all_x = torch.cat([x for x, y in data_batches])
-            all_y = torch.cat([y for x, y in data_batches])
             loss = F.cross_entropy(self.predict(all_x), all_y)
 
 
@@ -246,6 +244,230 @@ class LLR(Algorithm):
 
     def predict(self, x):
         return self.network(x)
+    
+class CBFT(Algorithm):
+    """
+    Connectivity Based Fine Tuning https://arxiv.org/abs/2211.08422
+    """
+
+    def __init__(self, input_shape, num_classes, num_domains, hparams):
+        super(CBFT, self).__init__(input_shape, num_classes, num_domains, hparams)
+        self.featurizer = networks.Featurizer(input_shape, self.hparams)
+        self.classifier = networks.Classifier(self.featurizer.n_outputs, num_classes, self.hparams['nonlinear_classifier'])
+        self.network = nn.Sequential(self.featurizer, self.classifier)
+        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self.hparams["lr"], weight_decay=self.hparams['weight_decay'])
+        self.criterion = nn.CrossEntropyLoss()
+        self.lambd = hparams.get("lambd", 1)
+        self.warmup_epochs = hparams.get("warmup_epochs", 1)
+        self.loss_margin = hparams.get("loss_margin", 1.0)
+        self.interpolated_network = None  # The interpolated network should be initialized.
+        self.classes = num_classes
+
+    # TODO: implement all of this
+    def update(self, minibatches, epoch, unlabeled=None, retrain=False, reinit=False, initialization_method='xavier_uniform'):
+        # minibatch and unlabeled are the same type of object
+        device = "cuda" if minibatches[0][0].is_cuda else "cpu"
+        if reinit:
+            self.classifier = networks.Classifier(
+                self.featurizer.n_outputs,
+                self.classes,
+                self.hparams['nonlinear_classifier'])
+            self.classifier.to(device)
+            if initialization_method == 'xavier_uniform':
+                self.classifier.apply(xavier_uniform_init)
+            elif initialization_method == 'kaiming_normal':
+                self.classifier.apply(kaiming_normal_init)
+            elif initialization_method == 'zero':
+                self.classifier.apply(zero_init)
+            elif initialization_method == 'CBFT':
+                self.old_classifier = self.classifier.clone()
+                self.old_classifier.to(device)
+                self.old_featurizer = self.featurizer.clone()
+                self.old_featurizer.to(device)
+                self.old_network = nn.Sequential(self.old_featurizer, self.old_classifier)
+                self.old_network.to(device)
+                self.interpolated_network = self.old_network.clone()
+                self.interpolated_network.to(device)
+                self.old_network.eval()
+                self.interpolated_network.train()
+            else:
+                raise ValueError("Invalid initialization method.")
+            self.network = nn.Sequential(self.featurizer, self.classifier)
+        if retrain:
+
+            new_data_batches = unlabeled
+            old_data_batches = minibatches
+
+            all_new_data = torch.cat([(x,  y) for x, y in new_data_batches])
+            all_new_x = torch.cat([x for (x, y) in all_new_data])
+            all_new_y = torch.cat([y for (x, y) in all_new_data])
+            all_new_features = self.featurizer(all_new_x)
+
+            all_old_data = torch.cat([(x, y) for x, y in old_data_batches])
+            all_old_x = torch.cat([x for (x, y) in all_old_data])
+            all_old_y = torch.cat([y for (x, y) in all_old_data])
+            all_old_features = self.featurizer(all_old_x)
+
+            n_classes = self.classifier.weight.shape[0]
+            class_ids_new = {i: (all_new_y == i).nonzero().view(-1,1).type(torch.long) for i in range(n_classes)} 
+            class_ids_old = {i: (all_old_x == i).nonzero().view(-1,1).type(torch.long) for i in range(n_classes)}
+            
+
+            # Get interpolated network
+            with torch.no_grad():
+                t = 0.5 + 0.5 * (torch.rand(1)).clip(-0.5, 0.5)[0]
+                for module_old, module_new, module_interpolated in zip(self.old_network.modules(), self.network.modules(), self.interpolated_network.modules()):
+                    module_interpolated.weight.data = t * module_old.weight.data + (1 - t) * module_new.weight.data
+                    module_interpolated.bias.data = t * module_old.bias.data + (1 - t) * module_new.bias.data
+                    
+            # Get barrier loss: compute loss and backward in interpolated network
+            self.interpolated_network.zero_grad()
+            self.network.zero_grad()
+            outputs_interpolated = self.interpolated_network(all_old_x)
+            loss = (self.loss_margin - F.cross_entropy(outputs_interpolated, all_old_y)).abs()
+            loss.backward()
+
+            # Get barrier loss: associate gradients from interpolated network to new network
+            with torch.no_grad():
+                for module_new, module_interpolated in zip(self.network.modules(), self.interpolated_network.modules()):
+                    module_new.weight.grad = (1-t) * module_interpolated.weight.grad
+                    module_new.bias.grad = (1-t) * module_interpolated.bias.grad
+
+            # Update network with barrier loss
+            self.optimizer.step()
+
+            # Get invariance loss and fine tuning loss
+            self.network.zero_grad()
+            if epoch >= self.warmup_epochs:
+                loss = F.cross_entropy(self.network(all_new_x), all_new_y)
+            else:
+                inv_loss = 0
+                for i in range(n_classes):
+                    if (class_ids_new[i].shape[0] == 0 or class_ids_old[i].shape[0] == 0):
+                        continue
+                    inv_loss += (F.normalize(all_new_features[class_ids_new[i][:,0]].mean(dim=0, keepdim=True), dim=1) - F.normalize(all_old_features[class_ids_old[i][:,0]].mean(dim=0, keepdim=True), dim=1)).norm().pow(2)
+                loss = inv_loss / n_classes
+                loss += F.cross_entropy(self.network(all_new_x), all_new_y)
+            
+            # Update network with fine tuning loss and invariance loss
+            loss.backward()
+            self.optimizer.step()
+
+            if epoch >= self.warmup_epochs:
+                # self.lr_scheduler.step()
+                # TODO: sort our learning rate scheduler
+                pass
+
+            torch.cuda.empty_cache()
+
+        else:
+            data_batches = minibatches
+            all_data = torch.cat([(x, y) for x, y in data_batches])
+            all_x = torch.cat([x for x, y in all_data])
+            all_y = torch.cat([y for x, y in all_data])
+            loss = F.cross_entropy(self.predict(all_x), all_y)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+        return {'loss': loss.item()}
+
+    def predict(self, x):
+        return self.network(x)
+
+
+    def old_update(self, minibatches, unlabeled=None, epoch=0, retrain=False, reinit=False, initialization_method='xavier_uniform'):
+        self.network.train()
+        minibatches_nc, minibatches_c = minibatches
+        device = "cuda" if minibatches_nc[0][0].is_cuda else "cpu"
+        train_loss_c, train_loss_nc, correct_c, correct_nc, total_c, total_nc = 1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8
+        n_classes = self.network.linear.weight.shape[0] # Assuming the network has a linear layer
+
+        for batch_idx, ((inputs_nc, targets_nc), (inputs_c, targets_c)) in enumerate(zip(minibatches_nc, minibatches_c)):
+            # data
+            inputs_c, targets_c = inputs_c.to(device), targets_c.to(device)
+            inputs_nc, targets_nc = inputs_nc.to(device), targets_nc.to(device)
+            
+            # create a class-data dict for invariance loss
+            class_ids_nc = {i: (targets_nc == i).nonzero().view(-1,1).type(torch.long) for i in range(n_classes)} 
+            class_ids_c = {i: (targets_c == i).nonzero().view(-1,1).type(torch.long) for i in range(n_classes)}
+            
+            # ... Step 1: execute Barrier loss! ...
+            # get linear interpolated model
+            with torch.no_grad():
+                t = 0.5 + 0.5 * (torch.randn(1)).clip(-0.5, 0.5)[0] 
+
+                for module_c, module_nc, module_interpolated in zip(net_c.modules(), self.network.modules(), self.interpolated_network.modules()):
+                    if isinstance(module_c, nn.Conv2d) or isinstance(module_c, nn.Linear):
+                        module_interpolated.weight.data = t * module_c.weight.data + (1-t) * module_nc.weight.data
+                        module_interpolated.bias.data = t * module_c.bias.data + (1-t) * module_nc.bias.data
+                    elif isinstance(module_c, nn.BatchNorm2d):
+                        module_interpolated.weight.data = t * module_c.weight.data + (1-t) * module_nc.weight.data
+                        module_interpolated.bias.data = t * module_c.bias.data + (1-t) * module_nc.bias.data
+            
+            # ... compute loss and backward ...
+            self.interpolated_network.zero_grad()
+            outputs_interpolated = self.interpolated_network(inputs_c)
+            loss = (self.loss_margin - self.criterion(outputs_interpolated, targets_c)).abs()
+            loss.backward()
+
+            # associate grads from interpolated model to theta_nc
+            with torch.no_grad():
+                for module_nc, module_interpolated in zip(self.network.modules(), self.interpolated_network.modules()):
+                    if isinstance(module_nc, nn.Conv2d) or isinstance(module_nc, nn.Linear):
+                        module_nc.weight.grad = (1-t) * module_interpolated.weight.grad.data
+                        module_nc.bias.grad = (1-t) * module_interpolated.bias.grad.data
+                    elif isinstance(module_nc, nn.BatchNorm2d):
+                        module_nc.weight.grad = (1-t) * module_interpolated.weight.grad.data
+                        module_nc.bias.grad = (1-t) * module_interpolated.bias.grad.data
+            
+            # ... Step 1 update ...
+            self.optimizer.step()
+
+            train_loss_c += loss.item()
+            _, predicted_c = outputs_interpolated.max(1)
+            total_c += targets_c.size(0)
+            correct_c += predicted_c.eq(targets_c).sum().item()
+            
+            # ... Step 2: No-cue + Invariance loss ...
+            self.network.zero_grad()
+            if(epoch < self.warmup_epochs):
+                outputs_ns = self.network(inputs_ns)
+                loss = self.criterion(outputs_ns, targets_ns)
+            else:
+                z_nc, z_c = self.network(inputs_nc, use_linear=False), self.network(inputs_c, use_linear=False)
+                inv_loss = 0
+                for i in range(n_classes):
+                    if (class_ids_nc[i].shape[0] == 0 or class_ids_c[i].shape[0] == 0):
+                        continue
+                    # MSE
+                    inv_loss += (F.normalize(z_nc[class_ids_nc[i][:,0]].mean(dim=0, keepdim=True), dim=1) - F.normalize(z_c[class_ids_c[i][:,0]].mean(dim=0, keepdim=True), dim=1)).norm().pow(2)
+
+                outputs_nc = self.network.linear(z_nc)
+                loss = self.criterion(outputs_nc, targets_nc) + self.lambd * inv_loss / n_classes
+
+            # ... Step 2 update ...
+            loss.backward()
+            self.optimizer.step()
+
+            if epoch > self.warmup_epochs:
+                self.lr_scheduler.step()
+
+            train_loss_nc += loss.item()
+            _, predicted_nc = outputs_nc.max(1)
+            total_nc += targets_nc.size(0)
+            correct_nc += predicted_nc.eq(targets_nc).sum().item()
+
+            torch.cuda.empty_cache()
+
+        return {'loss_c': train_loss_c/(batch_idx+1), 'accuracy_c': 100. * correct_c/total_c, 'loss_nc': train_loss_nc/(batch_idx+1), 'accuracy_nc': 100. * correct_nc/total_nc}
+
+
+    def predict(self, x):
+        self.network.eval()
+        with torch.no_grad():
+            return self.network(x)
+
 
 class Fish(Algorithm):
     """
