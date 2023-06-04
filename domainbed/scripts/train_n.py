@@ -24,10 +24,9 @@ from domainbed.lib.fast_data_loader import InfiniteDataLoader, FastDataLoader
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Domain generalization')
-    # TODO: remove defaults
-    parser.add_argument('--data_dir', type=str, default='/home/gbetondji/Documents/ood_benchmark/data/spawrious224')
-    parser.add_argument('--dataset', type=str, default="SpawriousM2M_hard")
-    parser.add_argument('--algorithm', type=str, default="CBFT")
+    parser.add_argument('--data_dir', type=str, default=None)
+    parser.add_argument('--dataset', type=str, default=None)
+    parser.add_argument('--algorithm', type=str, default="ERM")
     parser.add_argument('--task', type=str, default="domain_adaptation",
         choices=["domain_generalization", "domain_adaptation"])
     parser.add_argument('--hparams', type=str,
@@ -39,10 +38,8 @@ if __name__ == "__main__":
         'random_hparams).')
     parser.add_argument('--seed', type=int, default=0,
         help='Seed for everything else')
-    # TODO: remove this after testing is done
-    parser.add_argument('--steps', type=int, default=500,
+    parser.add_argument('--steps', type=int, default=None,
         help='Number of steps. Default is dataset-dependent.')
-    # TODO: remove this after testing is done
     parser.add_argument('--retrain_steps', type=int, default=500,
         help='Number of layer retraining steps if using FLR or LLR.')
     parser.add_argument('--checkpoint_freq', type=int, default=None,
@@ -55,7 +52,7 @@ if __name__ == "__main__":
         help="For domain adaptation, % of test to use unlabeled for training.")
     parser.add_argument('--skip_model_save', action='store_true')
     parser.add_argument('--save_model_every_checkpoint', action='store_true')
-    parser.add_argument('--n_iter', type=int, default=1)
+    parser.add_argument('--n_iter', type=int, default=3)
     
     args = parser.parse_args()
 
@@ -244,7 +241,6 @@ if __name__ == "__main__":
                     for x,y in next(uda_minibatches_iterator)]
             else:
                 uda_device = None
-            # TODO: add CBFT to list of algorithms
             if args.task == "domain_adaptation" and step >= n_steps and args.algorithm in ['LLR','FLR', 'CBFT']:
                 if step == n_steps:
                     print("Retraining and reinitializing...")
@@ -265,7 +261,7 @@ if __name__ == "__main__":
             for key, val in step_vals.items():
                 checkpoint_vals[key].append(val)
 
-            if (step % checkpoint_freq == 0) or (step >= n_steps - 1 and (step % (checkpoint_freq*10) == 0)) or (step == n_steps+retrain_steps):
+            if (step % checkpoint_freq == 0) or (step == n_steps+retrain_steps):
                 results = {
                     'step': step,
                     'epoch': step / steps_per_epoch,
