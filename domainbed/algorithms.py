@@ -208,7 +208,7 @@ class LLR(Algorithm):
     def update(self, minibatches, unlabeled=None, retrain=False, reinit=False, initialization_method='xavier_uniform'):
         # minibatch and unlabeled are the same type of object
         device = "cuda" if minibatches[0][0].is_cuda else "cpu"
-        data_batches = minibatches
+        data_batches = minibatches if not retrain else unlabeled
         all_x = torch.cat([x for x, y in data_batches])
         all_y = torch.cat([y for x, y in data_batches])
         if reinit:
@@ -227,13 +227,11 @@ class LLR(Algorithm):
                 raise ValueError("Invalid initialization method.")
             self.network = nn.Sequential(self.featurizer, self.classifier)
         if retrain:
-            data_batches = unlabeled
-            all_features = self.featurizer(all_x)
             for param in self.featurizer.parameters():
                 param.requires_grad = False
+            all_features = self.featurizer(all_x)
             loss = F.cross_entropy(self.classifier(all_features), all_y)
         else:
-            data_batches = minibatches
             loss = F.cross_entropy(self.predict(all_x), all_y)
 
 
@@ -346,12 +344,6 @@ class CBFT(Algorithm):
                     if hasattr(module_interpolated, 'bias') and module_interpolated.bias is not None and hasattr(module_interpolated.bias, 'grad'):
                         module_new.bias.grad = (1-t) * module_interpolated.bias.grad
 
-            # with torch.no_grad():
-            #     for module_new, module_interpolated in zip(self.network.modules(), self.interpolated_network.modules()):
-            #         if isinstance(module_interpolated, nn.Linear) and hasattr(module_interpolated.weight, 'grad'):
-            #             module_new.weight.grad = (1-t) * module_interpolated.weight.grad
-            #         if isinstance(module_interpolated, nn.Linear) and hasattr(module_interpolated.bias, 'grad'):
-            #             module_new.bias.grad = (1-t) * module_interpolated.bias.grad
             # Update network with barrier loss
             self.optimizer.step()
 

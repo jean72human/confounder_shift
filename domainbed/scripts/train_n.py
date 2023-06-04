@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Domain generalization')
     # TODO: remove defaults
     parser.add_argument('--data_dir', type=str, default='/home/gbetondji/Documents/ood_benchmark/data/spawrious224')
-    parser.add_argument('--dataset', type=str, default="SpawriousM2M_easy")
+    parser.add_argument('--dataset', type=str, default="SpawriousM2M_hard")
     parser.add_argument('--algorithm', type=str, default="CBFT")
     parser.add_argument('--task', type=str, default="domain_adaptation",
         choices=["domain_generalization", "domain_adaptation"])
@@ -40,10 +40,10 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0,
         help='Seed for everything else')
     # TODO: remove this after testing is done
-    parser.add_argument('--steps', type=int, default=1,
+    parser.add_argument('--steps', type=int, default=500,
         help='Number of steps. Default is dataset-dependent.')
     # TODO: remove this after testing is done
-    parser.add_argument('--retrain_steps', type=int, default=100,
+    parser.add_argument('--retrain_steps', type=int, default=500,
         help='Number of layer retraining steps if using FLR or LLR.')
     parser.add_argument('--checkpoint_freq', type=int, default=None,
         help='Checkpoint every N steps. Default is dataset-dependent.')
@@ -236,7 +236,6 @@ if __name__ == "__main__":
         best_results = {}
         last_results_keys = None
         for step in range(start_step, n_steps+retrain_steps):
-            print("Step {}/{}".format(step, n_steps+retrain_steps))
             step_start_time = time.time()
             minibatches_device = [(x.to(device), y.to(device))
                 for x,y in next(train_minibatches_iterator)]
@@ -254,7 +253,6 @@ if __name__ == "__main__":
                     else:
                         step_vals = algorithm.update(minibatches_device, uda_device, retrain=True, reinit=True)
                 else:
-                    print("Retraining...")
                     if args.algorithm == 'CBFT':
                         step_vals = algorithm.update(minibatches_device, unlabeled=uda_device, retrain=True, epoch=step)
                     else:
@@ -267,7 +265,7 @@ if __name__ == "__main__":
             for key, val in step_vals.items():
                 checkpoint_vals[key].append(val)
 
-            if (step % checkpoint_freq == 0) or (step >= n_steps - 1) :
+            if (step % checkpoint_freq == 0) or (step >= n_steps - 1 and (step % (checkpoint_freq*10) == 0)) or (step == n_steps+retrain_steps):
                 results = {
                     'step': step,
                     'epoch': step / steps_per_epoch,
@@ -299,11 +297,15 @@ if __name__ == "__main__":
                 with open(epochs_path, 'a') as f:
                     f.write(json.dumps(results, sort_keys=True) + "\n")
 
-                if step<=checkpoint_freq:
+                if step<=checkpoint_freq or (retrain_steps > 1 and step<=n_steps+1):
                     best_results = results
                 else:
-                    if sum( [results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i not in args.test_envs] ) > sum( [best_results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i not in args.test_envs] ):
-                        best_results = results
+                    if args.algorithm in ['LLR','FLR', 'CBFT']:
+                        if sum( [results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i in args.test_envs] ) > sum( [best_results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i in args.test_envs] ):
+                            best_results = results
+                    else:
+                        if sum( [results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i not in args.test_envs] ) > sum( [best_results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i not in args.test_envs] ):
+                            best_results = results
 
                 algorithm_dict = algorithm.state_dict()
                 start_step = step + 1

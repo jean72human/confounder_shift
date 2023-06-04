@@ -503,7 +503,8 @@ class SpawriousBenchmark(MultipleDomainDataset):
                     cg_data_list = []
                     for cls in classes:
                         path = os.path.join(root_dir, f"domain_adaptation_ds/{location}/{cls}")
-                        data = CustomImageFolder(folder_path=path, class_index=self.class_list.index(cls), limit=limit, transform=transforms)
+                        # TODO: limit has been hardcoded to 50 for now. Change it later.
+                        data = CustomImageFolder(folder_path=path, class_index=self.class_list.index(cls), limit=5, transform=transforms)
                         cg_data_list.append(data)
                     
                     for_each_class_group[cg_index].append(ConcatDataset(cg_data_list))
