@@ -1,18 +1,18 @@
-__pycache__
+__pycache__/
 domainbed/facebook.py
 
-domainbed/data/*
-train_output/*
-search_output/*
-loop_output/*
-final_output/*
+domainbed/data/
+train_output/
+search_output/
+loop_output/
+final_output/
 *_output/
 sweep_*/
 output_*/
 
-.vscode/
-
+.vscode
 data/
 
 *.pth
+**/*.pth
 
