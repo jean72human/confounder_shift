@@ -10,9 +10,8 @@ final_output/
 sweep_*/
 output_*/
 
-.vscode
+.vscode/
 data/
 
 *.pth
-**/*.pth
 
