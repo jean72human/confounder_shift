@@ -7,5 +7,12 @@ search_output/*
 loop_output/*
 final_output/*
 *_output/
+sweep_*/
+output_*/
 
-data
+.vscode/
+
+data/
+
+*.pth
+

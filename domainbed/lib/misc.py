@@ -210,6 +210,61 @@ def accuracy(network, loader, weights, device):
 
     return correct / total
 
+def accuracy_WL(network, loader, weights, device):
+    correct = 0
+    total = 0
+    weights_offset = 0
+
+    network.eval()
+    with torch.no_grad():
+        for x, y, u in loader:
+            x = x.to(device)
+            y = y.to(device)
+            u = u.to(device)
+            p = network.predict(x)
+            if weights is None:
+                batch_weights = torch.ones(len(x))
+            else:
+                batch_weights = weights[weights_offset : weights_offset + len(x)]
+                weights_offset += len(x)
+            batch_weights = batch_weights.to(device)
+            if p.size(1) == 1:
+                correct += (p.gt(0).eq(y).float() * batch_weights.view(-1, 1)).sum().item()
+            else:
+                correct += (p.argmax(1).eq(y).float() * batch_weights).sum().item()
+            total += batch_weights.sum().item()
+    network.train()
+
+    return correct / total
+
+# def accuracy_WL(network, loader, weights, device):
+#     from sklearn.metrics import roc_auc_score
+
+#     all_y_true = []
+#     all_y_pred = []
+#     weights_offset = 0
+
+#     network.eval()
+#     with torch.no_grad():
+#         for x, y, u in loader:
+#             x = x.to(device)
+#             y = y.to(device)
+#             p = network.predict(x)
+#             if weights is None:
+#                 batch_weights = torch.ones(len(x))
+#             else:
+#                 batch_weights = weights[weights_offset : weights_offset + len(x)]
+#                 weights_offset += len(x)
+#             batch_weights = batch_weights.to(device)
+#             all_y_true.extend(y.cpu().numpy())
+#             if p.size(1) == 1:
+#                 all_y_pred.extend(p.sigmoid().cpu().numpy().flatten())
+#             else:
+#                 all_y_pred.extend(p.softmax(dim=1).cpu().numpy()[:, 1])
+#     network.train()
+
+#     return roc_auc_score(all_y_true, all_y_pred)
+
 class Tee:
     def __init__(self, fname, mode="a"):
         self.stdout = sys.stdout

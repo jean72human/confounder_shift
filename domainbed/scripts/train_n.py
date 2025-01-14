@@ -155,7 +155,8 @@ if __name__ == "__main__":
         if args.task == "domain_adaptation" and len(uda_splits) == 0:
             if args.dataset.startswith("Spawrious"):
                 print('Using spawrious data for domain adaptation.')
-                _, uda = misc.split_dataset(dataset.domain_adaptation_ds,0)
+                # _, uda = misc.split_dataset(dataset.domain_adaptation_ds,0)
+                uda = dataset.domain_adaptation_ds
                 # uda_weights = misc.make_weights_for_balanced_classes(uda)
                 uda_weights = None
                 uda_splits = [(uda, uda_weights)]
@@ -234,11 +235,21 @@ if __name__ == "__main__":
         last_results_keys = None
         for step in range(start_step, n_steps+retrain_steps):
             step_start_time = time.time()
-            minibatches_device = [(x.to(device), y.to(device))
+            if args.dataset.endswith('WL'):
+                minibatches_device = [(x.to(device), y.to(device), u.to(device))
+                for x,y,u in next(train_minibatches_iterator)]
+            else:
+                minibatches_device = [(x.to(device), y.to(device))
                 for x,y in next(train_minibatches_iterator)]
             if args.task == "domain_adaptation":
-                uda_device = [(x.to(device), y.to(device))
+                if args.dataset.endswith('WL'):
+                    uda_device = [(x.to(device), y.to(device), u.to(device))
+                    for x,y,u in next(uda_minibatches_iterator)]
+                else:
+                    uda_device = [(x.to(device), y.to(device))
                     for x,y in next(uda_minibatches_iterator)]
+                # uda_device = [(x.to(device), y.to(device))
+                #     for x,y in next(uda_minibatches_iterator)]
             else:
                 uda_device = None
             if args.task == "domain_adaptation" and step >= n_steps and args.algorithm in ['LLR','FLR', 'CBFT']:
@@ -272,7 +283,10 @@ if __name__ == "__main__":
 
                 evals = zip(eval_loader_names, eval_loaders, eval_weights)
                 for name, loader, weights in evals:
-                    acc = misc.accuracy(algorithm, loader, weights, device)
+                    if args.dataset.endswith('WL'):
+                        acc = misc.accuracy_WL(algorithm, loader, weights, device)
+                    else:
+                        acc = misc.accuracy(algorithm, loader, weights, device)
                     results[name+'_acc'] = acc
 
                 results['mem_gb'] = torch.cuda.max_memory_allocated() / (1024.*1024.*1024.)

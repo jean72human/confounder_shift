@@ -28,7 +28,7 @@ def _hparams(algorithm, dataset, random_seed):
     # Unconditional hparam definitions.
 
     _hparam('data_augmentation', True, lambda r: True)
-    _hparam('arch', "resnet18", lambda r: "vit-b")
+    _hparam('arch', "resnet18", lambda r: "resnet18")
     _hparam('resnet_dropout', 0., lambda r: 0.1)
     _hparam('class_balanced', False, lambda r: False)
     # TODO: nonlinear classifiers disabled
@@ -65,11 +65,11 @@ def _hparams(algorithm, dataset, random_seed):
     elif algorithm == "Mixup":
         _hparam('mixup_alpha', 0.2, lambda r: 10**r.uniform(-1, -1))
 
-    elif algorithm == "GroupDRO":
-        _hparam('groupdro_eta', 1e-2, lambda r: 10**r.uniform(-3, -1))
+    elif algorithm == "GroupDRO" or algorithm == "GroupDRO_WL":
+        _hparam('groupdro_eta', 1e-2, lambda r: 10**r.uniform(-1, 4))
 
-    elif algorithm == "MMD" or algorithm == "CORAL" or algorithm == "CausIRL_CORAL" or algorithm == "CausIRL_MMD":
-        _hparam('mmd_gamma', 1., lambda r: 10**r.uniform(-1, 1))
+    elif algorithm == "MMD" or algorithm == "CORAL" or algorithm == "CORAL_WL" or algorithm == "UShift" or algorithm == "CausIRL_CORAL" or algorithm == "CausIRL_MMD":
+        _hparam('mmd_gamma', 1., lambda r: 10**r.uniform(-1, 4))
 
     elif algorithm == "MLDG":
         _hparam('mldg_beta', 1., lambda r: 10**r.uniform(-1, 1))
@@ -158,7 +158,9 @@ def _hparams(algorithm, dataset, random_seed):
         _hparam('weight_decay', 0., lambda r: 10**r.uniform(-6, -2))
 
     if dataset in SMALL_IMAGES:
-        _hparam('batch_size', 64, lambda r: int(2**r.uniform(3, 9)))
+        _hparam('batch_size', 64, lambda r: 256)
+    elif dataset.endswith('WL'):
+        _hparam('batch_size', 256, lambda r: 256)
     elif algorithm == 'ARM':
         _hparam('batch_size', 8, lambda r: 8)
     elif dataset == 'DomainNet':
