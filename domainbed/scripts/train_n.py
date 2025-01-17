@@ -265,7 +265,10 @@ if __name__ == "__main__":
                     else:
                         step_vals = algorithm.update(minibatches_device, uda_device, retrain=True)
             else:
-                step_vals = algorithm.update(minibatches_device, uda_device)
+                if args.algorithm == "UShift2":
+                    step_vals = algorithm.update(minibatches_device, eval_loaders[0], uda_device, step=step)
+                else:
+                    step_vals = algorithm.update(minibatches_device, uda_device)
 
             checkpoint_vals['step_time'].append(time.time() - step_start_time)
 

@@ -304,252 +304,508 @@ class SUBG(Algorithm):
         return self.network(x)
 
 
-
 class UShift2(Algorithm):
     """
-    Empirical Risk Minimization (ERM)
+    Empirical Risk Minimization (ERM) with extra logic to keep/use the best models.
+
+    Each model in self.networks[i] deals only with data for which u == i.
+    So, when we evaluate self.networks[i], we only look at x,y with u == i.
+    In contrast, self.network_u is for classifying u across all data.
     """
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(UShift2, self).__init__(input_shape, num_classes, num_domains,
-                                  hparams)
+                                      hparams)
         self.n_u = 2
         self.momentum = 0.1
         self.w = torch.zeros((self.n_u, 1))
-        self.C = torch.zeros((self.n_u,self.n_u))
+        self.C = torch.zeros((self.n_u, self.n_u))
         self.num_classes = num_classes
 
+        # Build main networks (one for each possible value of u) + network_u for classifying u
         self.networks = nn.ModuleList()
         for _ in range(self.n_u):
             featurizer = networks.Featurizer(input_shape, self.hparams)
             classifier = networks.Classifier(
                 featurizer.n_outputs,
                 num_classes,
-                self.hparams['nonlinear_classifier'])
-
-            self.networks.append(nn.Sequential(featurizer,classifier))
+                self.hparams['nonlinear_classifier']
+            )
+            self.networks.append(nn.Sequential(featurizer, classifier))
 
         featurizer_u = networks.Featurizer(input_shape, self.hparams)
         classifier_u = networks.Classifier(
             featurizer_u.n_outputs,
             self.n_u,
-            self.hparams['nonlinear_classifier'])
+            self.hparams['nonlinear_classifier']
+        )
+        self.network_u = nn.Sequential(featurizer_u, classifier_u)
 
-        self.network_u = nn.Sequential(featurizer_u,classifier_u)
-
+        # Optimizer
         self.optimizer = torch.optim.Adam(
-            itertools.chain(*[network.parameters() for network in self.networks+[self.network_u]]),
+            itertools.chain(
+                *[net.parameters() for net in (list(self.networks) + [self.network_u])]
+            ),
             lr=self.hparams["lr"],
             weight_decay=self.hparams['weight_decay']
         )
 
+        ######################################################################
+        # Initialize "best copies" of each model + their accuracies
+        ######################################################################
+        self.best_networks = nn.ModuleList()
+        self.best_networks_accuracies = []
+        for net in self.networks:
+            net_copy = copy.deepcopy(net)
+            self.best_networks.append(net_copy)
+            self.best_networks_accuracies.append(0.0)
 
-    def update(self, minibatches, unlabeled=None):
+        self.best_network_u = copy.deepcopy(self.network_u)
+        self.best_network_u_accuracy = 0.0
+
+    def update(self, minibatches, loader, unlabeled=None, step=0):
+        """
+        Perform one training step using `minibatches`.
+        Only every 100 steps do we check accuracy on the `loader`
+        and potentially update the best model copies.
+
+        minibatches: list of (x, y, u) tuples
+        loader: DataLoader for evaluation
+        unlabeled: (unused here)
+        step: current step number (for the 100-step check)
+        """
         device = minibatches[0][0].device
-        # Concatenate the tensors from minibatches
+
+        # 1) TRAINING STEP with minibatches
+        # ------------------------------------------------------
+        # Gather all x, y, u from minibatches
         all_x = torch.cat([x for x, y, u in minibatches]).to(device)
         all_y = torch.cat([y for x, y, u in minibatches]).to(device)
         all_u = torch.cat([u for x, y, u in minibatches]).to(device)
 
-        # ----------------------------
-        # Step 1: Group Subsampling
-        # ----------------------------
+        # Subsample to balance the number of examples for each (y, u) group
+        unique_u_vals = torch.unique(all_u)
+        unique_y_vals = torch.unique(all_y)
+        balanced_x = []
+        balanced_y = []
+        balanced_u = []
 
-        all_y = all_y.long()
-        all_u = all_u.long()
+        min_samples = float('inf')
+        for u_class in unique_u_vals:
+            for y_class in unique_y_vals:
+                count = ((all_u == u_class) & (all_y == y_class)).sum().item()
+                if count < min_samples:
+                    min_samples = count
 
-        # Find the minimum number of samples for any combination of y and u
-        min_count = float('inf')
-        for y_val in torch.unique(all_y):
-            for u_val in torch.unique(all_u):
-                count = ((all_y == y_val) & (all_u == u_val)).sum().item()
-                if count < min_count:
-                    min_count = count
-        
-        # Subsample all_x and all_y
-        indices = []
-        for y_val in torch.unique(all_y):
-            for u_val in torch.unique(all_u):
-                y_u_indices = ((all_y == y_val) & (all_u == u_val)).nonzero(as_tuple=True)[0]
-                if len(y_u_indices) > 0 :
-                    subsample_indices = torch.randperm(len(y_u_indices))[:min_count]
-                    indices.append(y_u_indices[subsample_indices])
-        
-        indices = torch.cat(indices)
-        all_x = all_x[indices]
-        all_y = all_y[indices]
-        all_u = all_u[indices]
+        for u_class in unique_u_vals:
+            for y_class in unique_y_vals:
+                idxs = ((all_u == u_class) & (all_y == y_class)).nonzero(as_tuple=True)[0]
+                selected = idxs[torch.randperm(len(idxs))[:min_samples]]
+                balanced_x.append(all_x[selected])
+                balanced_y.append(all_y[selected])
+                balanced_u.append(all_u[selected])
 
-        
+        all_x = torch.cat(balanced_x)
+        all_y = torch.cat(balanced_y)
+        all_u = torch.cat(balanced_u)
+
+        # Recreate confusion matrix C
         self.create_C(all_x, all_u)
 
-        loss = 0
+        # Forward pass & compute losses
         pred_u = self.network_u(all_x)
-        loss += F.cross_entropy(pred_u,all_u)
-        ys = torch.cat([network(all_x).unsqueeze(-1) for network in self.networks],-1)
-        pred_y = torch.bmm(ys,F.one_hot(all_u,num_classes=self.n_u).float().unsqueeze(-1)).squeeze()
-        loss += F.cross_entropy(pred_y,all_y)
+        loss = F.cross_entropy(pred_u, all_u)
 
+        # For classification of y: each self.networks[i] handles data when u==i
+        # But we do a "mixture" approach (like in your original code):
+        ys = torch.cat([net(all_x).unsqueeze(-1) for net in self.networks], dim=-1)
+        # shape: (N, num_classes, n_u)
+        pred_y = torch.bmm(
+            ys,
+            F.one_hot(all_u, num_classes=self.n_u).float().unsqueeze(-1)
+        ).squeeze()  # => shape: (N, num_classes)
+        loss += F.cross_entropy(pred_y, all_y)
+
+        # Backprop and optimize
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        # # Calculate and print accuracy for each group
-        # for i in range(self.n_u):
-        #     group_indices = all_u == i
-        #     if group_indices.sum() > 0:
-        #         correct = (pred_y[group_indices].argmax(1) == all_y[group_indices]).float().sum()
-        #         accuracy = 100 * correct / group_indices.sum()
-        #         print(f"group {i}: {accuracy:.2f}%")
-        # correct = (pred_u.argmax(1) == all_u.squeeze()).float().sum()
-        # accuracy = 100 * correct / all_u.size(-1)
-        # print(f"U acc: {accuracy:.2f}%")
+        # 2) OPTIONAL EVAL every 100 steps
+        # ------------------------------------------------------
+        if step % 100 == 0:
+            # Evaluate each network i only on data for which u == i
+            for i, net in enumerate(self.networks):
+                current_acc = self._eval_accuracy_on_loader_group_balance(
+                    net, loader, device, is_u=False, network_idx=i
+                )
+                if current_acc > self.best_networks_accuracies[i]:
+                    self.best_networks_accuracies[i] = current_acc
+                    self.best_networks[i].load_state_dict(
+                        copy.deepcopy(net.state_dict())
+                    )
+
+            # Evaluate network_u (classification of u) on all data
+            current_acc_u = self._eval_accuracy_on_loader_group_balance(
+                self.network_u, loader, device, is_u=True, network_idx=None
+            )
+            if current_acc_u > self.best_network_u_accuracy:
+                self.best_network_u_accuracy = current_acc_u
+                self.best_network_u.load_state_dict(
+                    copy.deepcopy(self.network_u.state_dict())
+                )
 
         return {'loss': loss.item()}
 
     def create_w(self, adapt_x):
         device = adapt_x.device
-        mu = torch.zeros(self.n_u,1).to(device)
-        matrices = []
+        mu = torch.zeros(self.n_u, 1, device=device)
 
-        # features = self.featurizer(adapt_x)
-        # u = self.classifieru(features)
         u = self.network_u(adapt_x)
-        _, u = torch.max(u.unsqueeze(-1),1)
+        _, u = torch.max(u.unsqueeze(-1), dim=1)
         for i in range(self.n_u):
-            mu[i,0] = (u==i).sum().item()
-        # print(mu)
-        mu = mu/mu.sum()
-        # print(mu)
+            mu[i, 0] = (u == i).sum().item()
+        mu = mu / (mu.sum() + 1e-8)
 
         w = torch.linalg.pinv(self.C) @ mu
         w = torch.clip(w, min=1e-2, max=15)
-        w = w / w.sum()
-        self.w = w.to(adapt_x.device)
+        w = w / (w.sum() + 1e-8)
+        self.w = w.to(device)
     
     def create_C(self, all_x, all_u):
         device = all_x.device
-        # features = self.featurizer(all_x)
-        # u = self.classifiery(features)
         u = self.network_u(all_x)
-        _, u = torch.max(u.unsqueeze(-1),1)
+        _, u = torch.max(u.unsqueeze(-1), dim=1)
         cm = confusion_matrix(all_u.cpu(), u.cpu(), labels=list(range(self.n_u)), normalize='true')
         new_C = torch.from_numpy(np.array(cm)).float().T.to(device)
-        
-        self.C = new_C.to(all_x.device)
+        self.C = new_C
 
     def predict(self, x, u=None):
+        """
+        We use the best copies, not the current/active versions.
+        """
         if u is None:
+            # We first guess u using self.best_network_u, then
+            # pick each self.best_networks[i] accordingly.
             self.create_w(x)
-            pred_u = self.network_u(x).softmax(-1).unsqueeze(-1)
-            ys = torch.cat([network(x).softmax(-1).unsqueeze(-1) for network in self.networks],-1)
-            pred_y = torch.bmm(ys,pred_u*self.w[None,...].to(x.device)).squeeze()
+            pred_u = self.best_network_u(x).softmax(-1).unsqueeze(-1)
+            ys = torch.cat([
+                net(x).softmax(-1).unsqueeze(-1) for net in self.best_networks
+            ], dim=-1)
+            pred_y = torch.bmm(
+                ys,
+                pred_u * self.w[None, ...].to(x.device)
+            ).squeeze()
         else:
-            pred_u = F.one_hot(u,num_classes=self.n_u).float().unsqueeze(-1).to(x.device)
-            ys = torch.cat([network(x).softmax(-1).unsqueeze(-1) for network in self.networks],-1)
-            pred_y = torch.bmm(ys,pred_u).squeeze()
+            # If user provides the value of u, we do a simpler combination
+            pred_u = F.one_hot(u, num_classes=self.n_u).float().unsqueeze(-1).to(x.device)
+            ys = torch.cat([
+                net(x).softmax(-1).unsqueeze(-1) for net in self.best_networks
+            ], dim=-1)
+            pred_y = torch.bmm(ys, pred_u).squeeze()
 
         return pred_y
 
+    ######################################################################
+    # Evaluate accuracy on loader with group balancing
+    ######################################################################
+    def _eval_accuracy_on_loader_group_balance(
+        self, model, loader, device, is_u=False, network_idx=None
+    ):
+        """
+        If is_u == True: measure accuracy on *all* data for classifying u.
+          - Group-balance among (y, u).
+        
+        If is_u == False: measure accuracy on the subset of data for which u == network_idx,
+          then group-balance among y.
+        """
+        model.eval()
 
-# class UShift(Algorithm):
+        all_x = []
+        all_y = []
+        all_u = []
+
+        # 1) Collect full data from loader
+        with torch.no_grad():
+            for x, y, u in loader:
+                all_x.append(x)
+                all_y.append(y)
+                all_u.append(u)
+
+        if len(all_x) == 0:
+            # Loader might be empty; avoid errors
+            model.train()
+            return 0.0
+
+        all_x = torch.cat(all_x).to(device)
+        all_y = torch.cat(all_y).to(device)
+        all_u = torch.cat(all_u).to(device)
+
+        if is_u:
+            # -----------------------------------------------
+            # EVALUATE network_u ACROSS ALL (y, u) DATA
+            # Group-balance among (y, u)
+            # -----------------------------------------------
+            unique_y_vals = torch.unique(all_y)
+            unique_u_vals = torch.unique(all_u)
+
+            min_samples = float('inf')
+            for yval in unique_y_vals:
+                for uval in unique_u_vals:
+                    count = ((all_y == yval) & (all_u == uval)).sum().item()
+                    if count < min_samples:
+                        min_samples = count
+
+            if min_samples == 0:
+                # If there's any (y, u) pair with no samples, we can skip or default accuracy
+                model.train()
+                return 0.0
+
+            balanced_x = []
+            balanced_y = []
+            balanced_u = []
+            for yval in unique_y_vals:
+                for uval in unique_u_vals:
+                    indices = ((all_y == yval) & (all_u == uval)).nonzero(as_tuple=True)[0]
+                    selected = indices[torch.randperm(len(indices))[:min_samples]]
+                    balanced_x.append(all_x[selected])
+                    balanced_y.append(all_y[selected])
+                    balanced_u.append(all_u[selected])
+
+            balanced_x = torch.cat(balanced_x)
+            balanced_u = torch.cat(balanced_u)
+
+            outputs = model(balanced_x)  # shape: (N, n_u)
+            preds = outputs.argmax(dim=1)
+            correct = (preds == balanced_u).sum().item()
+            total = balanced_u.size(0)
+            acc = correct / total if total > 0 else 0.0
+
+        else:
+            # -----------------------------------------------
+            # EVALUATE networks[i] ONLY ON DATA WHERE u == i
+            # Group-balance among y
+            # -----------------------------------------------
+            assert network_idx is not None, (
+                "network_idx must be provided when is_u=False"
+            )
+
+            # Filter out data for which u != network_idx
+            mask = (all_u == network_idx)
+            filtered_x = all_x[mask]
+            filtered_y = all_y[mask]
+
+            if filtered_x.size(0) == 0:
+                # No data for that u in the loader
+                model.train()
+                return 0.0
+
+            # Now group balance among y
+            unique_y_vals = torch.unique(filtered_y)
+            min_samples = float('inf')
+            # find smallest group across y classes
+            for yval in unique_y_vals:
+                count = (filtered_y == yval).sum().item()
+                if count < min_samples:
+                    min_samples = count
+
+            if min_samples == 0:
+                model.train()
+                return 0.0
+
+            balanced_x = []
+            balanced_y = []
+            for yval in unique_y_vals:
+                indices = (filtered_y == yval).nonzero(as_tuple=True)[0]
+                selected = indices[torch.randperm(len(indices))[:min_samples]]
+                balanced_x.append(filtered_x[selected])
+                balanced_y.append(filtered_y[selected])
+
+            balanced_x = torch.cat(balanced_x)
+            balanced_y = torch.cat(balanced_y)
+
+            outputs = model(balanced_x)  # shape: (N, num_classes)
+            preds = outputs.argmax(dim=1)
+            correct = (preds == balanced_y).sum().item()
+            total = balanced_y.size(0)
+            acc = correct / total if total > 0 else 0.0
+
+        model.train()
+        return acc
+
+
+# class UShift2(Algorithm):
 #     """
 #     Empirical Risk Minimization (ERM)
 #     """
 
 #     def __init__(self, input_shape, num_classes, num_domains, hparams):
-#         super(UShift, self).__init__(input_shape, num_classes, num_domains,
+#         super(UShift2, self).__init__(input_shape, num_classes, num_domains,
 #                                   hparams)
 #         self.n_u = 2
+#         self.momentum = 0.1
 #         self.w = torch.zeros((self.n_u, 1))
 #         self.C = torch.zeros((self.n_u,self.n_u))
 #         self.num_classes = num_classes
+#         self.temp_path = "cmnist_output_ushift/ushift"
+#         self.best_acc = [0] * self.n_u
+#         self.best_acc_u = 0
 
-#         self.featurizer = networks.Featurizer(input_shape, self.hparams)
+#         self.networks = nn.ModuleList()
+#         for _ in range(self.n_u):
+#             featurizer = networks.Featurizer(input_shape, self.hparams)
+#             classifier = networks.Classifier(
+#                 featurizer.n_outputs,
+#                 num_classes,
+#                 self.hparams['nonlinear_classifier'])
 
-#         self.network = nn.Sequential(
-#             networks.Classifier(
-#                 self.featurizer.n_outputs,
-#                 num_classes * self.n_u,
-#                 self.hparams['nonlinear_classifier']), 
-#             nn.Softmax(-2)
-#         )
+#             self.networks.append(nn.Sequential(featurizer,classifier))
 
-
+#         featurizer_u = networks.Featurizer(input_shape, self.hparams)
 #         classifier_u = networks.Classifier(
-#             self.featurizer.n_outputs,
+#             featurizer_u.n_outputs,
 #             self.n_u,
 #             self.hparams['nonlinear_classifier'])
 
-#         self.network_u = nn.Sequential(classifier_u, nn.Softmax(-1))
+#         self.network_u = nn.Sequential(featurizer_u,classifier_u)
 
-#         # Create a list of all parameters from featurizer, networks, and network_u
-#         all_params = list(self.featurizer.parameters())
-#         all_params += list(self.network.parameters())
-#         all_params += list(self.network_u.parameters())
-
-#         # Define a single optimizer for all parameters
 #         self.optimizer = torch.optim.Adam(
-#             all_params,
+#             itertools.chain(*[network.parameters() for network in self.networks+[self.network_u]]),
 #             lr=self.hparams["lr"],
 #             weight_decay=self.hparams['weight_decay']
 #         )
 
+#     def train_submodels(self, train_minibatches_iterator, uda_minibatches_iterator, eval_loader, n_steps, device):
+#         for step in range(n_steps):
+#             minibatches = [(x.to(device), y.to(device), u.to(device)) for x,y,u in next(train_minibatches_iterator)]
+#             all_x = torch.cat([x for x, y, u in minibatches]).to(device)
+#             all_y = torch.cat([y for x, y, u in minibatches]).to(device)
+#             all_u = torch.cat([u for x, y, u in minibatches]).to(device)
+#             submodel_accus = []
+#             for idx,network in enumerate(self.networks):
+#                 x = all_x[all_u==idx]
+#                 y = all_y[all_u==idx]
 
-#     def update(self, minibatches, unlabeled=None):
-#         device = minibatches[0][0].device
-#         all_x = torch.cat([x for x, y, u in minibatches]).to(device)
-#         all_y = torch.cat([y for x, y, u in minibatches]).to(device)
-#         all_u = torch.cat([u for x, y, u in minibatches]).to(device)
+#                 # Subsample to balance classes within each group
+#                 unique_y = torch.unique(y)
+#                 balanced_x = []
+#                 balanced_y = []
+#                 min_samples = float('inf')
+#                 for y_class in unique_y:
+#                     count = (y == y_class).sum().item()
+#                     if count < min_samples:
+#                         min_samples = count
 
-#         # Oversample to balance the number of examples for each (y, u) group
-#         unique_u = torch.unique(all_u)
-#         unique_y = torch.unique(all_y)
-#         balanced_x = []
-#         balanced_y = []
-#         balanced_u = []
+#                 for y_class in unique_y:
+#                     indices = (y == y_class).nonzero(as_tuple=True)[0]
+#                     subsample_indices = indices[torch.randperm(len(indices))[:min_samples]]
+#                     balanced_x.append(x[subsample_indices])
+#                     balanced_y.append(y[subsample_indices])
 
-#         max_samples = 0
-#         for u_class in unique_u:
-#             for y_class in unique_y:
-#                 count = ((all_u == u_class) & (all_y == y_class)).sum().item()
-#                 if count > max_samples:
-#                     max_samples = count
+#                 x = torch.cat(balanced_x)
+#                 y = torch.cat(balanced_y)
 
-#         for u_class in unique_u:
-#             for y_class in unique_y:
-#                 indices = ((all_u == u_class) & (all_y == y_class)).nonzero(as_tuple=True)[0]
-#                 if len(indices) > 0:
-#                     oversample_indices = indices[torch.randint(len(indices), (max_samples,))]
-#                     balanced_x.append(all_x[oversample_indices])
-#                     balanced_y.append(all_y[oversample_indices])
-#                     balanced_u.append(all_u[oversample_indices])
+#                 self._train_submodel(network,x,y)
+#                 accu = self._eval_submodel(network, eval_loader, idx)
+#                 submodel_accus.append(accu)
+#             u_accu = self._eval_submodel_u(self.network_u, eval_loader)
+#             self._train_submodel(self.network_u,all_x,all_u)
+#             if (step + 1) % 100 == 0:
+#                 print(f"Step {step+1}:")
+#                 for i, accu in enumerate(submodel_accus):
+#                     print(f"\tAccuracy of submodel {i}: {accu}")
+#                 print(f"\tAccuracy of submodel u: {u_accu}")
+#         self.load_best()
+#         self.create_C(all_x,all_u)
+#         self.create_w(all_x)
 
-#         all_x = torch.cat(balanced_x)
-#         all_y = torch.cat(balanced_y)
-#         all_u = torch.cat(balanced_u)
-        
-
-#         all_x = self.featurizer(all_x)
-
-#         self.create_C(all_x, all_u)
-
-#         loss = 0
-
-#         y = self.network(all_x).reshape(-1, self.num_classes, self.n_u)
-#         all_u_one_hot = F.one_hot(all_u, num_classes=self.n_u).float()
-#         outputs = torch.bmm(y, all_u_one_hot.unsqueeze(-1)).squeeze()
-        
-#         loss += F.nll_loss(outputs, all_y)
-        
-#         u = self.network_u(all_x)
-#         loss += F.nll_loss(u, all_u)
-
+#     def _train_submodel(self, network, x, y):
+#         """
+#         Performs a single step of gradient descent on the given network using the provided data.
+#         """
+#         loss = F.cross_entropy(network(x), y)
 #         self.optimizer.zero_grad()
 #         loss.backward()
 #         self.optimizer.step()
 
-#         return {'loss': loss.item()}
+#     def _eval_submodel(self, network, eval_loader, idx):
+#         """
+#         Evaluates the given network on the data in eval_loader where u=idx and saves the model if it's the best so far.
+#         Subsamples the data to balance it class-wise within each group.
+#         """
+#         correct = 0
+#         total = 0
+#         network.eval()
+#         with torch.no_grad():
+#             all_x, all_y, all_u = [], [], []
+#             for x, y, u in eval_loader:
+#                 x, y, u = x.to(next(network.parameters()).device), y.to(next(network.parameters()).device), u.to(next(network.parameters()).device)
+#                 mask = (u == idx)
+#                 if mask.sum() > 0:
+#                     all_x.append(x[mask])
+#                     all_y.append(y[mask])
+#                     all_u.append(u[mask])
+
+#             if not all_x:  # No data for this group
+#                 return 0
+
+#             all_x = torch.cat(all_x)
+#             all_y = torch.cat(all_y)
+#             all_u = torch.cat(all_u)
+
+#             # # Subsample to balance classes within each group
+#             unique_y = torch.unique(all_y)
+#             balanced_x = []
+#             balanced_y = []
+#             min_samples = float('inf')
+#             for y_class in unique_y:
+#                 count = (all_y == y_class).sum().item()
+#                 if count < min_samples:
+#                     min_samples = count
+
+#             for y_class in unique_y:
+#                 indices = (all_y == y_class).nonzero(as_tuple=True)[0]
+#                 subsample_indices = indices[torch.randperm(len(indices))[:min_samples]]
+#                 balanced_x.append(all_x[subsample_indices])
+#                 balanced_y.append(all_y[subsample_indices])
+
+#             all_x = torch.cat(balanced_x)
+#             all_y = torch.cat(balanced_y)
+
+#             outputs = network(all_x)
+#             _, predicted = torch.max(outputs.data, 1)
+#             total += all_y.size(0)
+#             correct += (predicted == all_y).sum().item()
+
+#         acc = correct / total if total > 0 else 0
+#         network.train()
+#         if acc > self.best_acc[idx]:
+#             self.best_acc[idx] = acc
+#             torch.save(network.state_dict(), f"{self.temp_path}_{idx}.pth")
+#         return acc
+
+#     def _eval_submodel_u(self, network, eval_loader):
+#         """
+#         Evaluates the given network on the data in eval_loader where u=idx and saves the model if it's the best so far.
+#         """
+#         correct = 0
+#         total = 0
+#         network.eval()
+#         with torch.no_grad():
+#             for x, y, u in eval_loader:
+#                 x, u = x.to(next(network.parameters()).device), u.to(next(network.parameters()).device)
+
+#                 outputs = network(x)
+#                 _, predicted = torch.max(outputs.data, 1)
+#                 total += u.size(0)
+#                 correct += (predicted == u).sum().item()
+
+#         acc = correct / total if total > 0 else 0
+#         network.train()
+#         if acc > self.best_acc_u:
+#             self.best_acc_u = acc
+#             torch.save(network.state_dict(), f"{self.temp_path}_u.pth")
+#         return acc
 
 #     def create_w(self, adapt_x):
 #         device = adapt_x.device
@@ -569,7 +825,7 @@ class UShift2(Algorithm):
 #         w = torch.linalg.pinv(self.C) @ mu
 #         w = torch.clip(w, min=1e-2, max=15)
 #         w = w / w.sum()
-#         self.w = w
+#         self.w = w.to(adapt_x.device)
     
 #     def create_C(self, all_x, all_u):
 #         device = all_x.device
@@ -580,30 +836,25 @@ class UShift2(Algorithm):
 #         cm = confusion_matrix(all_u.cpu(), u.cpu(), labels=list(range(self.n_u)), normalize='true')
 #         new_C = torch.from_numpy(np.array(cm)).float().T.to(device)
         
+#         self.C = new_C.to(all_x.device)
 
-#         self.C = new_C
-        
+#     def load_best(self):
+#         for idx,network in enumerate(self.networks):
+#             network.load_state_dict(torch.load(f"{self.temp_path}_{idx}.pth"))
+#         self.network_u.load_state_dict(torch.load(f"{self.temp_path}_u.pth"))
 
 #     def predict(self, x, u=None):
-#         x = self.featurizer(x)
-
-#         # y = self.classifiery(features).view(-1,self.num_classes,self.n_u)
-#         # y = torch.cat([net(x).unsqueeze(-1) for net in self.networks],-1)
-        
-        
-#         if u is not None:
-#             y = self.network(x).reshape(-1,self.num_classes,self.n_u)
-#             all_u_one_hot = F.one_hot(u, num_classes=self.n_u).float().to(x.device)
-#             outputs = torch.bmm(y, all_u_one_hot.unsqueeze(-1)).squeeze()
-
-#             return outputs
-#         else:
+#         if u is None:
 #             self.create_w(x)
-#             y = self.network(x).reshape(-1,self.num_classes,self.n_u)
-#             u = self.network_u(x).unsqueeze(-1)
-#             outputs = torch.bmm(y, u*self.w[None,...]).squeeze()
-            
-#             return torch.log(outputs)
+#             pred_u = self.network_u(x).softmax(-1).unsqueeze(-1)
+#             ys = torch.cat([network(x).softmax(-1).unsqueeze(-1) for network in self.networks],-1)
+#             pred_y = torch.bmm(ys,pred_u*self.w[None,...].to(x.device)).squeeze()
+#         else:
+#             pred_u = F.one_hot(u,num_classes=self.n_u).float().unsqueeze(-1).to(x.device)
+#             ys = torch.cat([network(x).softmax(-1).unsqueeze(-1) for network in self.networks],-1)
+#             pred_y = torch.bmm(ys,pred_u).squeeze()
+
+#         return pred_y
 
 
 

@@ -237,33 +237,50 @@ def accuracy_WL(network, loader, weights, device):
 
     return correct / total
 
-# def accuracy_WL(network, loader, weights, device):
-#     from sklearn.metrics import roc_auc_score
+def accuracy_WL2(network, loader, weights, device):
+    correct = 0
+    total = 0
+    weights_offset = 0
 
-#     all_y_true = []
-#     all_y_pred = []
-#     weights_offset = 0
+    network.eval()
 
-#     network.eval()
-#     with torch.no_grad():
-#         for x, y, u in loader:
-#             x = x.to(device)
-#             y = y.to(device)
-#             p = network.predict(x)
-#             if weights is None:
-#                 batch_weights = torch.ones(len(x))
-#             else:
-#                 batch_weights = weights[weights_offset : weights_offset + len(x)]
-#                 weights_offset += len(x)
-#             batch_weights = batch_weights.to(device)
-#             all_y_true.extend(y.cpu().numpy())
-#             if p.size(1) == 1:
-#                 all_y_pred.extend(p.sigmoid().cpu().numpy().flatten())
-#             else:
-#                 all_y_pred.extend(p.softmax(dim=1).cpu().numpy()[:, 1])
-#     network.train()
+    u_values = [0, 1]
+    u_correct = {u: 0 for u in u_values}
+    u_total = {u: 0 for u in u_values}
 
-#     return roc_auc_score(all_y_true, all_y_pred)
+    with torch.no_grad():
+        for x, y, u in loader:
+            x = x.to(device)
+            y = y.to(device)
+            u = u.to(device)
+            p = network.predict(x)
+            if weights is None:
+                batch_weights = torch.ones(len(x))
+            else:
+                batch_weights = weights[weights_offset : weights_offset + len(x)]
+                weights_offset += len(x)
+            batch_weights = batch_weights.to(device)
+
+            for u_value in u_values:
+                u_mask = (u == u_value)
+                if u_mask.sum() > 0:
+                    p_u = p[u_mask]
+                    y_u = y[u_mask]
+                    batch_weights_u = batch_weights[u_mask]
+                    if p.size(1) == 1:
+                        u_correct[u_value] += (p_u.gt(0).eq(y_u).float() * batch_weights_u.view(-1, 1)).sum().item()
+                    else:
+                        u_correct[u_value] += (p_u.argmax(1).eq(y_u).float() * batch_weights_u).sum().item()
+                    u_total[u_value] += batch_weights_u.sum().item()
+
+    network.train()
+
+    accuracies = [u_correct[u] / u_total[u] for u in u_values if u_total[u] > 0]
+    # for u_value, acc in zip(u_values, accuracies):
+    #     print(f'Accuracy for u=={u_value}: {acc:.4f}')
+
+    return sum(accuracies) / len(accuracies)
+
 
 class Tee:
     def __init__(self, fname, mode="a"):
