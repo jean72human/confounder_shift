@@ -9,6 +9,7 @@ final_output/
 *_output/
 sweep_*/
 output_*/
+cmnist*/
 
 .vscode/
 data/
