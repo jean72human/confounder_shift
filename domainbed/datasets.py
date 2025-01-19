@@ -1236,7 +1236,7 @@ class SpawriousM2M_hard_WL(SpawriousBenchmarkWL):
         group = ['desert', 'mountain', 'mountain', 'desert']
         test = ['desert', 'mountain', 'beach', 'snow']
         combinations = self.build_type2_combination(group,test)
-        super().__init__(combinations['train_combinations'], [0.1], [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9], root_dir, hparams['data_augmentation'])
+        super().__init__(combinations['train_combinations'], [0.05], [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9], root_dir, hparams['data_augmentation'])
 
 
 class SpawriousM2M_hard_Shift(SpawriousBenchmarkWL):
@@ -1247,7 +1247,7 @@ class SpawriousM2M_hard_Shift(SpawriousBenchmarkWL):
         group = ['desert', 'mountain', 'mountain', 'desert']
         test = ['desert', 'mountain', 'beach', 'snow']
         combinations = self.build_type2_combination(group,test)
-        super().__init__(combinations['train_combinations'], [0.1], [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9], root_dir, hparams['data_augmentation'])
+        super().__init__(combinations['train_combinations'], [0.05], [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9], root_dir, hparams['data_augmentation'])
 
     def _create_data_list(self, combinations, root_dir, transforms):
         data_list = []

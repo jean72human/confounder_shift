@@ -196,6 +196,7 @@ if __name__ == "__main__":
             for i in range(len(out_splits))]
         eval_loader_names += ['env{}_uda'.format(i)
             for i in range(len(uda_splits))]
+        eval_index = eval_loader_names.index('env0_out')
 
         algorithm_class = algorithms.get_algorithm_class(args.algorithm)
         algorithm = algorithm_class(dataset.input_shape, dataset.num_classes,
@@ -266,7 +267,7 @@ if __name__ == "__main__":
                         step_vals = algorithm.update(minibatches_device, uda_device, retrain=True)
             else:
                 if args.algorithm == "UShift2":
-                    step_vals = algorithm.update(minibatches_device, eval_loaders[0], uda_device, step=step)
+                    step_vals = algorithm.update(minibatches_device, eval_loaders[eval_index], uda_device, step=step)
                 else:
                     step_vals = algorithm.update(minibatches_device, uda_device)
 
@@ -315,6 +316,9 @@ if __name__ == "__main__":
                 else:
                     if args.algorithm in ['LLR','FLR', 'CBFT']:
                         if sum( [results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i in args.test_envs] ) > sum( [best_results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i in args.test_envs] ):
+                            best_results = results
+                    elif args.algorithm in ['SUBG']:
+                        if results['env5_out_acc']  > best_results['env5_out_acc'] :
                             best_results = results
                     else:
                         if sum( [results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i not in args.test_envs] ) > sum( [best_results['env{}_out_acc'.format(i)] for i in range(len(out_splits)) if i not in args.test_envs] ):
